@@ -1,0 +1,54 @@
+default_stages: [pre-commit, pre-merge-commit, manual]
+repos:
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.2.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          [
+            "--strict",
+            "--types",
+            "feat,fix,docs,chore,style,refactor,tests,build",
+          ]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-ast
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: debug-statements
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: trailing-whitespace
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+
+  - repo: local
+    hooks:
+      - id: lint
+        name: Linter
+        entry: just lint
+        language: python
+        types: [python]
+        require_serial: true
+        verbose: true
+        pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: static-analysis
+        name: Static analysis
+        stages: [pre-push, pre-merge-commit]
+        entry: just static
+        language: python
+        types: [python]
+        require_serial: true
+        verbose: true
+        pass_filenames: false
