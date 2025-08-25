@@ -7,8 +7,5 @@ form the basis of the taskaio asynchronous task scheduling system.
 
 from taskaio._internal.scheduler import TaskPlan, TaskScheduler
 
-__all__ = (
-    "TaskPlan",
-    "TaskScheduler",
-)
+__all__ = ("TaskPlan", "TaskScheduler")
 __version__ = "0.0.1"
