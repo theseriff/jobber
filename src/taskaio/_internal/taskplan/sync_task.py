@@ -1,7 +1,7 @@
 import asyncio
 import functools
 from collections.abc import Callable
-from typing import ParamSpec, TypeVar
+from typing import Final, ParamSpec, TypeVar
 
 from .base import TaskPlan
 
@@ -18,14 +18,14 @@ class TaskPlanSync(TaskPlan[_T]):
         **kwargs: _P.kwargs,
     ) -> None:
         super().__init__(loop, func, *args, **kwargs)
+        self._func_injected: Final = functools.partial(
+            self._func,
+            *self._args,
+            **self._kwargs,
+        )
 
     def _begin(self) -> None:
-        callback_injected = functools.partial(
-            self.func,
-            *self.args,
-            **self.kwargs,
-        )
         try:
-            self._result: _T = callback_injected()
+            self._result: _T = self._func_injected()
         finally:
             self._event.set()

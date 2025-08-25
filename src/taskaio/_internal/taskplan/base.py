@@ -17,16 +17,16 @@ _P = ParamSpec("_P")
 
 class TaskPlan(Generic[_T], ABC):
     __slots__: tuple[str, ...] = (
+        "_args",
         "_event",
+        "_func",
+        "_kwargs",
         "_loop",
         "_result",
         "_task_id",
         "_timer_handler",
-        "args",
         "delay_seconds",
-        "func",
         "is_planned",
-        "kwargs",
     )
 
     def __init__(
@@ -36,14 +36,14 @@ class TaskPlan(Generic[_T], ABC):
         *args: _P.args,
         **kwargs: _P.kwargs,
     ) -> None:
+        self._func: Final = func
+        self._args: Final = args
+        self._kwargs: Final = kwargs
         self._event: asyncio.Event = asyncio.Event()
         self._loop: asyncio.AbstractEventLoop = loop
         self._result: _T = EMPTY
         self._timer_handler: asyncio.TimerHandle = EMPTY
         self._task_id: str = EMPTY
-        self.func: Final = func
-        self.args: Final = args
-        self.kwargs: Final = kwargs
         self.delay_seconds: float = 0
         self.is_planned: bool = False
 
@@ -54,9 +54,21 @@ class TaskPlan(Generic[_T], ABC):
     @property
     def task_id(self) -> str:
         return self._task_id or (  # fallback
-            f"func_name={self.func.__name__}, args={self.args}, "
-            f"kwargs={self.kwargs}, delay_seconds={self.delay_seconds}"
+            f"func_name={self._func.__name__}, args={self._args}, "
+            f"kwargs={self._kwargs}, delay_seconds={self.delay_seconds}"
         )
+
+    @property
+    def result(self) -> _T:
+        if self._result is EMPTY:
+            raise TaskNotCompletedError
+        return self._result
+
+    @property
+    def timer_handler(self) -> asyncio.TimerHandle:
+        if self._timer_handler is EMPTY:
+            raise TimerHandlerUninitializedError
+        return self._timer_handler
 
     def at(self, at: datetime, /) -> "TaskPlan[_T]":
         timestamp_now = datetime.now(tz=at.tzinfo).timestamp()
@@ -82,18 +94,6 @@ class TaskPlan(Generic[_T], ABC):
 
     def is_done(self) -> bool:
         return self._event.is_set()
-
-    @property
-    def result(self) -> _T:
-        if self._result is EMPTY:
-            raise TaskNotCompletedError
-        return self._result
-
-    @property
-    def timer_handler(self) -> asyncio.TimerHandle:
-        if self._timer_handler is EMPTY:
-            raise TimerHandlerUninitializedError
-        return self._timer_handler
 
     async def wait(self) -> None:
         if not self.is_planned:
