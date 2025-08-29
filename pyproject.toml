@@ -11,7 +11,7 @@ version = "0.1.0"
 description = "Lightweight asynchronous task scheduler with cron-like syntax and delayed execution for Python functions"
 requires-python = ">=3.10"
 readme = "README.md"
-license = {text = "MIT"}
+license = { text = "MIT" }
 authors = [
     { name = "Sergey Yavorsky", email = "maclovi.dev@gmail.com" },
 ]
@@ -32,20 +32,20 @@ keywords = [
     "python-asyncio",
 ]
 classifiers = [
-    "Typing :: Typed",
-    "Framework :: AsyncIO",
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "Operating System :: OS Independent",
-    "License :: OSI Approved :: MIT License",
+    "Topic :: Utilities",
+    "Topic :: System :: Scheduling",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Topic :: Software Development :: Libraries :: Application Frameworks",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: System :: Scheduling",
-    "Topic :: Utilities",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Development Status :: 4 - Beta",
+    "Framework :: AsyncIO",
+    "Typing :: Typed",
 ]
 
 [dependency-groups]
