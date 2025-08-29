@@ -6,13 +6,8 @@ about errors and guidance on how to handle common scheduling scenarios.
 """
 
 from taskaio._internal.exceptions import (
-    InvalidTaskTypeError,
     TaskNotCompletedError,
     TimerHandlerUninitializedError,
 )
 
-__all__ = (
-    "InvalidTaskTypeError",
-    "TaskNotCompletedError",
-    "TimerHandlerUninitializedError",
-)
+__all__ = ("TaskNotCompletedError", "TimerHandlerUninitializedError")

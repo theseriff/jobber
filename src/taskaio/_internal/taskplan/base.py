@@ -1,7 +1,7 @@
 import asyncio
 import warnings
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from datetime import datetime
 from typing import Final, Generic, ParamSpec, TypeVar
 
@@ -32,7 +32,7 @@ class TaskPlan(Generic[_T], ABC):
     def __init__(
         self,
         loop: asyncio.AbstractEventLoop,
-        func: Callable[_P, _T],
+        func: Callable[_P, Coroutine[None, None, _T] | _T],
         *args: _P.args,
         **kwargs: _P.kwargs,
     ) -> None:
@@ -56,7 +56,7 @@ class TaskPlan(Generic[_T], ABC):
         return self._task_id or (  # fallback
             f"func_name={self._func.__name__}, args={self._args}, "
             f"kwargs={self._kwargs}, delay_seconds={self.delay_seconds}"
-        )
+        ).encode().hex(":")
 
     @property
     def result(self) -> _T:

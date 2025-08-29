@@ -19,9 +19,9 @@ class TaskPlanSync(TaskPlan[_T]):
     ) -> None:
         super().__init__(loop, func, *args, **kwargs)
         self._func_injected: Final = functools.partial(
-            self._func,
-            *self._args,
-            **self._kwargs,
+            func,
+            *args,
+            **kwargs,
         )
 
     def _begin(self) -> None:
