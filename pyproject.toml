@@ -44,12 +44,12 @@ classifiers = [
 
 [dependency-groups]
 lint = [
+    "mypy==1.17.0",
     "ruff==0.12.4",
     "bandit==1.8.6",
     "semgrep==1.130.0",
     "codespell==2.4.1",
     "basedpyright==1.31.4",
-    "mypy==1.17.0",
     # mypy extensions
     "mypy-extensions==1.1.0",
     "types-setuptools",
