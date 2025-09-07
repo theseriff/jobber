@@ -16,20 +16,14 @@ authors = [
     { name = "Sergey Yavorsky", email = "maclovi.dev@gmail.com" },
 ]
 keywords = [
-    "asyncio",
-    "async",
-    "scheduler",
     "cron",
+    "asyncio",
     "cron-jobs",
+    "scheduler",
+    "delayed-tasks",
+    "job-scheduler",
     "task-scheduler",
     "background-tasks",
-    "periodic-tasks",
-    "delayed-tasks",
-    "deferred-execution",
-    "job-scheduler",
-    "task-queue",
-    "lightweight",
-    "python-asyncio",
 ]
 classifiers = [
     "Topic :: Utilities",

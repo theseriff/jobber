@@ -25,16 +25,28 @@ repos:
       - id: mixed-line-ending
       - id: trailing-whitespace
 
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.36.2
+    hooks:
+      - id: typos
+
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
       - id: detect-secrets
 
+  - repo: https://github.com/DetachHead/basedpyright-pre-commit-mirror
+    rev: 1.31.4
+    hooks:
+      - id: basedpyright
+        stages: [pre-push, pre-merge-commit]
+
   - repo: local
     hooks:
-      - id: lint
-        name: Linter
-        entry: just lint
+      - id: static-analysis
+        name: Static analysis
+        stages: [pre-push, pre-merge-commit]
+        entry: just static
         language: python
         types: [python]
         require_serial: true
@@ -43,10 +55,9 @@ repos:
 
   - repo: local
     hooks:
-      - id: static-analysis
-        name: Static analysis
-        stages: [pre-push, pre-merge-commit]
-        entry: just static
+      - id: lint
+        name: Linter
+        entry: just lint
         language: python
         types: [python]
         require_serial: true
