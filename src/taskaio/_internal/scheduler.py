@@ -26,7 +26,7 @@ class TaskScheduler:
 
     def __init__(self, loop: asyncio.AbstractEventLoop | None = None) -> None:
         self._loop = loop or asyncio.get_running_loop()
-        self._tasks: list[TaskPlanSync[Any] | TaskPlanAsync[Any]] = []  # pyright: ignore[reportExplicitAny]
+        self._tasks: list[TaskPlanSync[Any] | TaskPlanAsync[Any]] = []
 
     @overload
     def schedule(  # type: ignore[overload-overlap]
