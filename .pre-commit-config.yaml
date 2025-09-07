@@ -50,6 +50,7 @@ repos:
     hooks:
       - id: static-analysis
         name: Static analysis
+        stages: [pre-push, manual]
         entry: just static
         language: python
         types: [python]
