@@ -15,7 +15,7 @@ default:
 [doc("Prepare venv and repo for developing")]
 [group("Common")]
 @bootstrap:
-    just venv-sync
+    just venv-sync-dev
     pre-commit install
 
 
@@ -39,6 +39,7 @@ default:
     echo "Run mypy.." && mypy --config-file pyproject.toml
     echo "Run bandit..." && bandit -c pyproject.toml -r src
     echo "Run semgrep..." && semgrep scan --config auto --error
+    echo "Run basedpyright..." && basedpyright --warnings --project pyproject.toml
 
 
 [doc("Run pre-commit all files")]
