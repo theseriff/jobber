@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+import warnings
 from collections.abc import Callable, Coroutine
 from typing import Any, ParamSpec, TypeVar, overload
 from uuid import uuid4
@@ -23,18 +24,30 @@ class TaskScheduler:
             loop or asyncio.get_running_loop()
         )
 
-    def register(self, func: Callable[_P, _R]) -> None:
-        self._register(func)
+    def register(self, callback: Callable[_P, _R]) -> None:
+        self._register(callback)
 
-    def _register(self, func: Callable[_P, _R]) -> None:
+    def register_all(self, *callbacks: Callable[_P, _R]) -> None:
+        for callback in callbacks:
+            self._register(callback)
+
+    def _register(
+        self,
+        func: Callable[_P, _R],
+        *,
+        callback_id: str | None = None,
+    ) -> None:
+        callback_id = callback_id or self._get_callback_id(func)
+        self._callback_registry[callback_id] = func
+
+    def _get_callback_id(self, func: Callable[_P, _R]) -> str:
         fmodule = func.__module__
         fname = func.__name__
         if fmodule == "__main__":
             fmodule = sys.argv[0].removesuffix(".py").replace(os.path.sep, ".")
         if fname == "<lambda>":
             fname = f"lambda_{uuid4().hex}"
-        callback_id = f"{fmodule}:{fname}"
-        self._callback_registry[callback_id] = func
+        return f"{fmodule}:{fname}"
 
     @overload
     def schedule(  # type: ignore[overload-overlap]
@@ -58,12 +71,22 @@ class TaskScheduler:
         *args: _P.args,
         **kwargs: _P.kwargs,
     ) -> TaskPlanSync[_R] | TaskPlanAsync[_R]:
+        callback_id = self._get_callback_id(func)
+        if callback_id not in self._callback_registry:
+            self._register(func, callback_id=callback_id)
+            warnings.warn(
+                f"Function {func.__name__!r} from module {func.__module__!r} "
+                f"was not pre-registered. It has been automatically registered"
+                f" with ID: {callback_id}. For better control and explicit "
+                "registration, please use the register() method"
+                "before scheduling tasks.",
+                UserWarning,
+                stacklevel=2,
+            )
         if is_async_callable(func):
             return TaskPlanAsync(self._loop, func, *args, **kwargs)
-
         if is_sync_callable(func):
             return TaskPlanSync(self._loop, func, *args, **kwargs)
-
         err_msg = f"Unsupported function type: {type(func)}"
         raise TypeError(err_msg)
 
