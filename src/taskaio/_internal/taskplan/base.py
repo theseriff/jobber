@@ -3,6 +3,7 @@ import traceback
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Coroutine
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Final, Generic, ParamSpec, TypeVar
 from uuid import uuid4
@@ -15,6 +16,13 @@ from taskaio._internal.exceptions import (
 
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
+
+
+@dataclass(slots=True)
+class TaskInfo:
+    callback_id: str
+    task_id: str
+    status: None
 
 
 class TaskPlan(Generic[_R], ABC):
