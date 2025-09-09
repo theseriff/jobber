@@ -23,9 +23,15 @@ class TaskPlanSync(TaskPlan[_R]):
             *args,
             **kwargs,
         )
+        self._run_in_thread: bool = False
 
     def _begin(self) -> None:
-        try:
-            self._result: _R = self._func_injected()
-        finally:
-            self._event.set()
+        if self._run_in_thread:
+            coro_callback = asyncio.to_thread(self._func_injected)
+            task = asyncio.create_task(coro_callback)
+            task.add_done_callback(self._exec_on_done)
+        else:
+            self._exec_on_done(self._func_injected)
+
+    def to_thread(self) -> None:
+        self._run_in_thread = True

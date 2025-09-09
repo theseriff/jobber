@@ -26,10 +26,4 @@ class TaskPlanAsync(TaskPlan[_R]):
 
     def _begin(self) -> None:
         task = asyncio.create_task(self._func_injected())
-        task.add_done_callback(self._task_done)
-
-    def _task_done(self, task: asyncio.Task[_R]) -> None:
-        try:
-            self._result: _R = task.result()
-        finally:
-            self._event.set()
+        task.add_done_callback(self._exec_on_done)
