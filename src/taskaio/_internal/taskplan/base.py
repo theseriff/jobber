@@ -1,4 +1,5 @@
 import asyncio
+import traceback
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Coroutine
@@ -22,6 +23,8 @@ class TaskPlan(Generic[_R], ABC):
         "_func",
         "_kwargs",
         "_loop",
+        "_on_error_callback",
+        "_on_success_callback",
         "_result",
         "_task_id",
         "_timer_handler",
@@ -41,6 +44,8 @@ class TaskPlan(Generic[_R], ABC):
         self._kwargs: Final = kwargs
         self._event: asyncio.Event = asyncio.Event()
         self._loop: asyncio.AbstractEventLoop = loop
+        self._on_success_callback: list[Callable[[_R], None]] = []
+        self._on_error_callback: list[Callable[[Exception], None]] = []
         self._result: _R = EMPTY
         self._timer_handler: asyncio.TimerHandle = EMPTY
         self._task_id: str = EMPTY
@@ -111,3 +116,40 @@ class TaskPlan(Generic[_R], ABC):
             )
         else:
             _ = await self._event.wait()
+
+    def _exec_on_done(
+        self,
+        task: asyncio.Task[_R] | Callable[..., _R],
+        /,
+    ) -> None:
+        try:
+            if isinstance(task, asyncio.Task):
+                self._result = task.result()
+            else:
+                self._result = task()
+        except Exception as exc:  # noqa: BLE001
+            self._run_hook_error(exc)
+        else:
+            self._run_hook_success(self._result)
+        finally:
+            self._event.set()
+
+    def on_success(self, callback: Callable[[_R], None]) -> None:
+        self._on_success_callback.append(callback)
+
+    def on_error(self, callback: Callable[[Exception], None]) -> None:
+        self._on_error_callback.append(callback)
+
+    def _run_hook_success(self, result: _R) -> None:
+        for call_success in self._on_success_callback:
+            try:
+                call_success(result)
+            except Exception:  # noqa: BLE001, PERF203
+                traceback.print_exc()
+
+    def _run_hook_error(self, exc: Exception) -> None:
+        for call_error in self._on_error_callback:
+            try:
+                call_error(exc)
+            except Exception:  # noqa: BLE001, PERF203
+                traceback.print_exc()
