@@ -43,10 +43,10 @@ classifiers = [
 
 [dependency-groups]
 lint = [
-    "mypy==1.17.1",
-    "ruff==0.12.12",
+    "mypy==1.18.1",
+    "ruff==0.13.0",
     "bandit==1.8.6",
-    "semgrep==1.135.0",
+    "semgrep==1.136.0",
     "codespell==2.4.1",
     "basedpyright==1.31.4",
     # mypy extensions
@@ -56,11 +56,11 @@ lint = [
 test = [
     "coverage[toml]==7.10.6",
     "pytest==8.4.2",
-    "pytest-asyncio==1.1.0",
+    "pytest-asyncio==1.2.0",
 ]
 docs = [
     "mkdocs==1.6.1",
-    "mkdocs-material==9.6.18",
+    "mkdocs-material==9.6.20",
     "mkdocstrings[python]==0.30.0",
 ]
 dev = [
