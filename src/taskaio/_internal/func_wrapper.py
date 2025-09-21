@@ -57,23 +57,22 @@ class FuncWrapper(Generic[_P, _R]):
 
             @functools.wraps(func)
             def inner(*args: _P.args, **kwargs: _P.kwargs) -> TaskExecutor[_R]:
-                task_exec: TaskExecutorAsync[_R] | TaskExecutorSync[_R]
                 func_injected = functools.partial(func, *args, **kwargs)
-                if asyncio.iscoroutinefunction(func_injected):
-                    task_exec = TaskExecutorAsync(
+                return (
+                    TaskExecutorAsync(
                         loop=self._loop,
                         func_id=fn_id,
                         func_injected=func_injected,
                         task_registered=self.task_registered,
                     )
-                else:
-                    task_exec = TaskExecutorSync(
+                    if asyncio.iscoroutinefunction(func_injected)
+                    else TaskExecutorSync(
                         loop=self._loop,
                         func_id=fn_id,
                         func_injected=cast("Callable[_P, _R]", func_injected),
                         task_registered=self.task_registered,
                     )
-                return task_exec
+                )
 
             return inner
 
