@@ -48,6 +48,22 @@ class TaskInfo(Generic[_R]):
         self.task_id: str = task_id
         self.timer_handler: Final = timer_handler
 
+    def __lt__(self, other: TaskInfo[_R]) -> bool:
+        return self.exec_at_timestamp < other.exec_at_timestamp
+
+    def __gt__(self, other: TaskInfo[_R]) -> bool:
+        return self.exec_at_timestamp > other.exec_at_timestamp
+
+    @property
+    def result(self) -> _R:
+        if self._result is EMPTY:
+            raise TaskNotCompletedError
+        return self._result
+
+    @result.setter
+    def result(self, val: _R) -> None:
+        self._result = val
+
     def is_done(self) -> bool:
         return self._event.is_set()
 
@@ -61,21 +77,8 @@ class TaskInfo(Generic[_R]):
             return
         _ = await self._event.wait()
 
-    @property
-    def result(self) -> _R:
-        if self._result is EMPTY:
-            raise TaskNotCompletedError
-        return self._result
-
-    @result.setter
-    def result(self, val: _R) -> None:
-        self._result = val
-
-    def __lt__(self, other: TaskInfo[_R]) -> bool:
-        return self.exec_at_timestamp < other.exec_at_timestamp
-
-    def __gt__(self, other: TaskInfo[_R]) -> bool:
-        return self.exec_at_timestamp > other.exec_at_timestamp
+    def cancel(self) -> None:
+        self.timer_handler.cancel()
 
 
 class TaskExecutor(ABC, Generic[_R]):
@@ -139,6 +142,24 @@ class TaskExecutor(ABC, Generic[_R]):
     @abstractmethod
     def _execute(self) -> None:
         raise NotImplementedError
+
+    @abstractmethod
+    def to_thread(self) -> TaskExecutor[_R]:
+        raise NotImplementedError
+
+    def on_success(
+        self,
+        *callbacks: Callable[[_R], None],
+    ) -> TaskExecutor[_R]:
+        self._on_success_callback.extend(callbacks)
+        return self
+
+    def on_error(
+        self,
+        *callbacks: Callable[[Exception], None],
+    ) -> TaskExecutor[_R]:
+        self._on_error_callback.extend(callbacks)
+        return self
 
     def call(self) -> _R:
         return cast("_R", self._func_injected())
@@ -208,31 +229,6 @@ class TaskExecutor(ABC, Generic[_R]):
             except Exception:  # noqa: BLE001, PERF203
                 traceback.print_exc()
 
-    def on_success(
-        self,
-        *callbacks: Callable[[_R], None],
-    ) -> TaskExecutor[_R]:
-        self._on_success_callback.extend(callbacks)
-        return self
-
-    def on_error(
-        self,
-        *callbacks: Callable[[Exception], None],
-    ) -> TaskExecutor[_R]:
-        self._on_error_callback.extend(callbacks)
-        return self
-
-    @abstractmethod
-    def to_thread(self) -> TaskExecutor[_R]:
-        warnings.warn(
-            "Method 'to_thread()' is ignored for async functions. "
-            "Use it only with synchronous functions. "
-            "Async functions are already executed in the event loop.",
-            category=RuntimeWarning,
-            stacklevel=2,
-        )
-        return self
-
 
 class TaskExecutorSync(TaskExecutor[_R]):
     _func_injected: Callable[..., _R]
@@ -261,7 +257,14 @@ class TaskExecutorSync(TaskExecutor[_R]):
             self._set_result(self._func_injected)
 
     def to_thread(self) -> TaskExecutor[_R]:
-        return super().to_thread()
+        warnings.warn(
+            "Method 'to_thread()' is ignored for async functions. "
+            "Use it only with synchronous functions. "
+            "Async functions are already executed in the event loop.",
+            category=RuntimeWarning,
+            stacklevel=2,
+        )
+        return self
 
 
 class TaskExecutorAsync(TaskExecutor[_R]):
