@@ -10,11 +10,13 @@ __all__ = (
     "NegativeDelayError",
     "TaskNotCompletedError",
     "TaskNotInitializedError",
+    "TaskaioBaseError",
 )
 
 from taskaio._internal.exceptions import (
     ConcurrentExecutionError,
     NegativeDelayError,
+    TaskaioBaseError,
     TaskNotCompletedError,
     TaskNotInitializedError,
 )
