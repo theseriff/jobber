@@ -192,9 +192,9 @@ class TaskExecutor(ABC, Generic[_R]):
         to_thread: bool = EMPTY,
         to_process: bool = EMPTY,
     ) -> TaskInfo[_R]:
-        self._is_cron = True
         if self._cron_parser is EMPTY:
             self._cron_parser = CronParser(expression=expression)
+            self._is_cron = True
         return self._schedule_cron(to_thread=to_thread, to_process=to_process)
 
     def _schedule_cron(
@@ -417,7 +417,7 @@ class TaskExecutorAsync(TaskExecutor[_R]):
 
     def to_thread(self) -> TaskExecutorAsync[_R]:
         warnings.warn(
-            ASYNC_FUNC_IGNORED_WARNING.format(fname="to_process"),
+            ASYNC_FUNC_IGNORED_WARNING.format(fname="to_thread"),
             category=RuntimeWarning,
             stacklevel=2,
         )
