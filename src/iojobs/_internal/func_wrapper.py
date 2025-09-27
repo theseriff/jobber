@@ -93,7 +93,7 @@ class FuncWrapper(Generic[_P, _R]):
 
         return wrapper
 
-    def stop(self) -> None:
+    def shutdown(self) -> None:
         self._executors.shutdown()
 
 

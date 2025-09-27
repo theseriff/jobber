@@ -7,12 +7,12 @@ import traceback
 import warnings
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from enum import Enum
 from typing import TYPE_CHECKING, Final, Generic, TypeVar, cast
 from uuid import uuid4
 
 from iojobs._internal._types import EMPTY, FuncID
 from iojobs._internal.cron_parser import CronParser
+from iojobs._internal.enums import ExecutionMode, JobStatus
 from iojobs._internal.exceptions import (
     ConcurrentExecutionError,
     JobNotCompletedError,
@@ -27,13 +27,6 @@ if TYPE_CHECKING:
     from iojobs._internal.executors import ExecutorPool
 
 _R = TypeVar("_R")
-
-
-class JobStatus(str, Enum):
-    SCHEDULED = "scheduled"
-    SUCCESS = "success"
-    CANCELED = "canceled"
-    ERROR = "error"
 
 
 class JobInfo(Generic[_R]):
@@ -353,11 +346,7 @@ class JobExecutor(ABC, Generic[_R]):
 
 
 class JobExecutorSync(JobExecutor[_R]):
-    __slots__: tuple[str, ...] = (
-        "_executors",
-        "_run_to_process",
-        "_run_to_thread",
-    )
+    __slots__: tuple[str, ...] = ("_execution_mode", "_executors")
     _func_injected: Callable[..., _R]
 
     def __init__(  # noqa: PLR0913
@@ -370,9 +359,8 @@ class JobExecutorSync(JobExecutor[_R]):
         executors: ExecutorPool,
         tz: ZoneInfo,
     ) -> None:
+        self._execution_mode: ExecutionMode = ExecutionMode.MAIN
         self._executors: Final = executors
-        self._run_to_process: bool = False
-        self._run_to_thread: bool = False
         super().__init__(
             loop=loop,
             func_id=func_id,
@@ -383,9 +371,9 @@ class JobExecutorSync(JobExecutor[_R]):
 
     def _execute(self) -> None:
         executor = EMPTY
-        if self._run_to_process:
+        if self._execution_mode is ExecutionMode.PROCESS:
             executor = self._executors.processpool_executor
-        elif self._run_to_thread:
+        elif self._execution_mode is ExecutionMode.THREAD:
             executor = self._executors.threadpool_executor
 
         if executor is not EMPTY:
@@ -395,11 +383,11 @@ class JobExecutorSync(JobExecutor[_R]):
             self._set_result(self._func_injected)
 
     def to_thread(self) -> JobExecutor[_R]:
-        self._run_to_thread = True
+        self._execution_mode = ExecutionMode.THREAD
         return self
 
     def to_process(self) -> JobExecutor[_R]:
-        self._run_to_process = True
+        self._execution_mode = ExecutionMode.PROCESS
         return self
 
 

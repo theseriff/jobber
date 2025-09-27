@@ -65,7 +65,7 @@ class JobScheduler:
                 job = jobs_scheduled[0]
                 await job.wait()
         finally:
-            self.stop()
+            self.shutdown()
 
-    def stop(self) -> None:
-        self._wrapper.stop()
+    def shutdown(self) -> None:
+        self._wrapper.shutdown()
