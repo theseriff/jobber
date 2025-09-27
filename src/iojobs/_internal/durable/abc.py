@@ -1,6 +1,7 @@
-import sqlite3
+from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-from typing import Final
+from datetime import datetime
+from typing import Protocol
 
 from iojobs._internal.enums import ExecutionMode, JobStatus
 
@@ -14,14 +15,13 @@ class PersistedJob:
     func_args: bytes
     func_kwargs: bytes
     execution_mode: ExecutionMode
+    created_at: datetime
+    updated_at: datetime
     cron_expression: str | None = None
-    result: bytes | None = None
     error: str | None = None
-    created_at: float = 0.0
-    updated_at: float = 0.0
 
 
-class DurableSQLite:
-    def __init__(self, db_path: str = ".") -> None:
-        db_path += "iojobs"
-        self._con: Final = sqlite3.connect(db_path)
+class JobRepository(Protocol, metaclass=ABCMeta):
+    @abstractmethod
+    def load(self, persisted_job: PersistedJob) -> None:
+        raise NotImplementedError
