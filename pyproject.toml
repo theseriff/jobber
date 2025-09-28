@@ -197,7 +197,7 @@ exclude_commit_patterns = [
     '''style(?:\([^)]*?\))?: .+''',
     '''test(?:\([^)]*?\))?: .+''',
     '''build\((?!deps\): .+)''',
-    '''Initial [Cc]ommit.*''',
+    '''Initial [Cc]ommit.*''', # codespell:ignore ommit
 ]
 
 [tool.semantic_release.branches.alpha]
