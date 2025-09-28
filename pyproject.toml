@@ -170,3 +170,35 @@ targets = "src"
 
 [tool.codespell]
 skip = "*.pyi,*.pyc,./site"
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+commit_parser = "conventional"
+
+[tool.semantic_release.commit_parser_options]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
+parse_squash_commits = true
+ignore_merge_commits = true
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "docs/src/CHANGELOG.md"
+output_format = "md"
+
+[tool.semantic_release.changelog]
+# Recommended patterns for conventional commits parser that is scope aware
+exclude_commit_patterns = [
+    '''chore(?:\([^)]*?\))?: .+''',
+    '''ci(?:\([^)]*?\))?: .+''',
+    '''refactor(?:\([^)]*?\))?: .+''',
+    '''style(?:\([^)]*?\))?: .+''',
+    '''test(?:\([^)]*?\))?: .+''',
+    '''build\((?!deps\): .+)''',
+    '''Initial [Cc]ommit.*''',
+]
+
+[tool.semantic_release.branches.alpha]
+# Matches branches with the prefixes 'feat/', 'fix/', or 'perf/'.
+match = "^(feat|fix|perf)/.+"
+prerelease = true
+prerelease_token = "alpha"
