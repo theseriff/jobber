@@ -8,7 +8,7 @@ module-root = "src"
 [project]
 name = "iojobs"
 version = "0.1.0"
-description = "Lightweight asynchronous job scheduler with cron-like syntax and delayed execution for Python functions"
+description = "Lightweight async/sync job scheduler with cron-like syntax and delayed execution for Python functions"
 requires-python = ">=3.10"
 readme = "README.md"
 license = { text = "MIT" }
