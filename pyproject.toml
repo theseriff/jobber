@@ -61,6 +61,9 @@ test = [
     "coverage[toml]==7.10.7",
     "pytest==8.4.2",
     "pytest-asyncio==1.2.0",
+    "pytest-timeout>=2.4.0",
+    "pytest-cov>=6.2.1",
+    "covdefaults>=2.3.0",
 ]
 docs = [
     "mkdocs==1.6.1",
@@ -68,9 +71,9 @@ docs = [
     "mkdocstrings[python]==0.30.1",
 ]
 dev = [
-    {include-group = "lint"},
-    {include-group = "test"},
-    {include-group = "docs"},
+    { include-group = "lint" },
+    { include-group = "test" },
+    { include-group = "docs" },
     "pre-commit==4.3.0",
     "detect-secrets==1.5.0",
 ]
@@ -81,13 +84,37 @@ Documentation = "https://github.com/Maclovi/iojobs/README.md"
 Repository = "https://github.com/Maclovi/iojobs"
 Issues = "https://github.com/Maclovi/iojobs/issues"
 
+# Tests
 [tool.pytest.ini_options]
 xfail_strict = true
+timeout = 30
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 markers = []
 
+[tool.coverage.run]
+plugins = ["covdefaults"]
+parallel = true
+branch = true
+concurrency = ["thread", "multiprocessing"]
+source = ["src", "tests"]
+omit = ["**/__init__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+exclude_also = [
+    'if TYPE_CHECKING:',
+    "if __name__ == .__main__.:",
+    '@()?abstractmethod',
+    "raise NotImplementedError",
+    "pass",
+    '\.\.\.',
+]
+omit = ['*/__init__.py']
+
+# Static Analysis
 [tool.basedpyright]
 include = ["src", "tests"]
 ignore = ["**/__pycache__", "**/alembic"]
@@ -100,7 +127,6 @@ reportAny = false
 mypy_path = "src"
 files = ["src", "tests"]
 python_version = "3.10"
-
 strict = true
 pretty = true
 warn_return_any = true
@@ -120,6 +146,14 @@ check_untyped_defs = true
 namespace_packages = true
 ignore_missing_imports = true
 
+[tool.semgrep]
+paths = ["src"]
+include = ["src"]
+
+[tool.bandit]
+targets = "src"
+
+# Liter
 [tool.ruff]
 src = ["src"]
 include = ["src/**.py", "tests/**.py"]
@@ -141,38 +175,10 @@ docstring-code-format = true
 known-first-party = ["src", "tests"]
 no-lines-before = ["local-folder"]
 
-[tool.coverage.run]
-parallel = true
-branch = true
-concurrency = ["thread", "multiprocessing"]
-source = ["src", "tests"]
-omit = ["**/__init__.py"]
-
-[tool.coverage.report]
-show_missing = true
-skip_empty = true
-exclude_also = [
-    'if TYPE_CHECKING:',
-    "if __name__ == .__main__.:",
-    '@()?abstractmethod',
-    "raise NotImplementedError",
-    "pass",
-    '\.\.\.',
-]
-omit = [
-    '*/__init__.py',
-]
-
-[tool.semgrep]
-paths = ["src"]
-include = ["src"]
-
-[tool.bandit]
-targets = "src"
-
 [tool.codespell]
 skip = "*.pyi,*.pyc,./site"
 
+# Python Semantic Release
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 commit_parser = "conventional"
