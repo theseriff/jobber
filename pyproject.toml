@@ -88,6 +88,7 @@ Issues = "https://github.com/Maclovi/iojobs/issues"
 [tool.pytest.ini_options]
 xfail_strict = true
 timeout = 30
+addopts = "--strict-markers --strict-config"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"

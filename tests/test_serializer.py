@@ -1,16 +1,12 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TypeAlias
 
 import pytest
 
 from iojobs._internal.serializers import (
     AstLiteralSerializer,
-    PickleSerializerUnsafe,
+    IOJobsSerializer,
+    UnsafePickleSerializer,
 )
-
-if TYPE_CHECKING:
-    from iojobs._internal.serializers.abc import JobsSerializer
 
 AllowedDataTypes: TypeAlias = (
     None
@@ -27,10 +23,7 @@ AllowedDataTypes: TypeAlias = (
 
 @pytest.mark.parametrize(
     "serializer",
-    [
-        AstLiteralSerializer(),
-        PickleSerializerUnsafe(),
-    ],
+    [AstLiteralSerializer(), UnsafePickleSerializer()],
 )
 @pytest.mark.parametrize(
     "data",
@@ -42,19 +35,17 @@ AllowedDataTypes: TypeAlias = (
         123.45,
         "hello",
         b"world",
-        [1, "a", None],
-        (1, "a", None),
+        [1, "a", None, [2, "b", True]],
+        (1, "a", None, (2, "b", True)),
         {"a": 1, "b": None},
         {1, "a", None},
     ],
 )
 def test_serialization_all(
-    serializer: JobsSerializer,
+    serializer: IOJobsSerializer,
     data: AllowedDataTypes,
 ) -> None:
-    """Tests that all serializers can serialize and deserialize basic Python types."""  # noqa: E501
-    # The AstLiteralSerializer has a bug and will fail this test for strings.
-    # It should use repr(value) instead of str(value) in its dumpb method.
+    """Tests that all serializers can [de]serialize basic Python types."""
     serialized = serializer.dumpb(data)
     deserialized = serializer.loadb(serialized)
     assert deserialized == data

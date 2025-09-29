@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from iojobs._internal.job_executor import JobExecutor
-    from iojobs._internal.serializers.abc import JobsSerializer
+    from iojobs._internal.serializers.abc import IOJobsSerializer
 
 
 _P = ParamSpec("_P")
@@ -27,7 +27,7 @@ class JobScheduler:
         *,
         tz: ZoneInfo = EMPTY,
         loop: asyncio.AbstractEventLoop = EMPTY,
-        serializer: JobsSerializer = EMPTY,
+        serializer: IOJobsSerializer = EMPTY,
     ) -> None:
         self._wrapper: FuncWrapper[..., Any] = FuncWrapper(  # pyright: ignore[reportExplicitAny]
             loop=loop,

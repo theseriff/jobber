@@ -124,33 +124,33 @@ class JobExecutor(ABC, Generic[_R]):
         "_func_id",
         "_func_injected",
         "_is_cron",
-        "_job_info",
         "_jobs_registered",
         "_loop",
         "_on_error_callback",
         "_on_success_callback",
+        "_scheduled_job",
         "_tz",
     )
 
     def __init__(
         self,
         *,
+        tz: ZoneInfo,
         loop: asyncio.AbstractEventLoop,
         func_id: FuncID,
         func_injected: Callable[..., Coroutine[None, None, _R] | _R],
         jobs_registered: list[ScheduledJob[_R]],
-        tz: ZoneInfo,
     ) -> None:
         self._func_id: FuncID = func_id
         self._func_injected: Callable[..., Coroutine[None, None, _R] | _R] = (
             func_injected
         )
+        self._tz: Final = tz
         self._loop: asyncio.AbstractEventLoop = loop
         self._on_success_callback: list[Callable[[_R], None]] = []
         self._on_error_callback: list[Callable[[Exception], None]] = []
-        self._job_info: ScheduledJob[_R] | None = None
+        self._scheduled_job: ScheduledJob[_R] | None = None
         self._jobs_registered: Final = jobs_registered
-        self._tz: Final = tz
         self._cron_parser: CronParser = EMPTY
         self._is_cron: bool = False
 
@@ -161,10 +161,10 @@ class JobExecutor(ABC, Generic[_R]):
         return self._loop
 
     @property
-    def job_info(self) -> ScheduledJob[_R]:
-        if self._job_info is None:
+    def scheduled_job(self) -> ScheduledJob[_R]:
+        if self._scheduled_job is None:
             raise JobNotInitializedError
-        return self._job_info
+        return self._scheduled_job
 
     @abstractmethod
     def _execute(self) -> None:
@@ -283,8 +283,8 @@ class JobExecutor(ABC, Generic[_R]):
         loop = self.loop
         when = loop.time() + delay_seconds
         time_handler = loop.call_at(when, self._execute)
-        if self._job_info and self._is_cron:
-            job_info = self._job_info
+        if self._scheduled_job and self._is_cron:
+            job_info = self._scheduled_job
             job_info._update(  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
                 job_id=uuid4().hex,
                 exec_at_timestamp=at_timestamp,
@@ -300,7 +300,7 @@ class JobExecutor(ABC, Generic[_R]):
                 job_registered=self._jobs_registered,
                 job_status=JobStatus.SCHEDULED,
             )
-            self._job_info = job_info
+            self._scheduled_job = job_info
         heapq.heappush(self._jobs_registered, job_info)
         return job_info
 
@@ -318,15 +318,15 @@ class JobExecutor(ABC, Generic[_R]):
                 result = func()
         except Exception as exc:  # noqa: BLE001
             traceback.print_exc()
-            self.job_info.status = JobStatus.ERROR
+            self.scheduled_job.status = JobStatus.ERROR
             self._run_hooks_error(exc)
         else:
-            self.job_info.result = result
-            self.job_info.status = JobStatus.SUCCESS
+            self.scheduled_job.result = result
+            self.scheduled_job.status = JobStatus.SUCCESS
             self._run_hooks_success(result)
         finally:
             _ = heapq.heappop(self._jobs_registered)
-            self.job_info._event.set()  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+            self.scheduled_job._event.set()  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
             if self._is_cron:
                 _ = self._schedule_cron()
 

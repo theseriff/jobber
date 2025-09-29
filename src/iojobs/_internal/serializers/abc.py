@@ -5,7 +5,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Any, Protocol
 
 
-class JobsSerializer(Protocol, metaclass=ABCMeta):
+class IOJobsSerializer(Protocol, metaclass=ABCMeta):
     @abstractmethod
     def dumpb(self, value: Any) -> bytes:
         raise NotImplementedError

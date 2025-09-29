@@ -5,10 +5,10 @@
 import ast
 from typing import Any
 
-from iojobs._internal.serializers.abc import JobsSerializer
+from iojobs._internal.serializers.abc import IOJobsSerializer
 
 
-class AstLiteralSerializer(JobsSerializer):
+class AstLiteralSerializer(IOJobsSerializer):
     def dumpb(self, value: Any) -> bytes:
         return repr(value).encode(encoding="utf-8")
 
