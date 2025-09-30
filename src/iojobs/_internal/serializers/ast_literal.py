@@ -1,16 +1,27 @@
-# ruff: noqa: ANN401
-# pyright: reportExplicitAny=false
-
-
 import ast
-from typing import Any
+from typing import TypeAlias, cast
 
 from iojobs._internal.serializers.abc import IOJobsSerializer
 
+AstLiteralTypes: TypeAlias = (
+    None
+    | bool
+    | int
+    | float
+    | str
+    | bytes
+    | list["AstLiteralTypes"]
+    | tuple["AstLiteralTypes"]
+    | dict[str, "AstLiteralTypes"]
+)
+
 
 class AstLiteralSerializer(IOJobsSerializer):
-    def dumpb(self, value: Any) -> bytes:
+    def dumpb(self, value: AstLiteralTypes) -> bytes:
         return repr(value).encode(encoding="utf-8")
 
-    def loadb(self, value: bytes) -> Any:
-        return ast.literal_eval(value.decode(encoding="utf-8"))
+    def loadb(self, value: bytes) -> AstLiteralTypes:
+        return cast(
+            "AstLiteralTypes",
+            ast.literal_eval(value.decode(encoding="utf-8")),
+        )

@@ -2,18 +2,17 @@ name: "Publish to pypi"
 
 on:
   push:
-    tags:
-      # Publish on any tag starting with a `v`, e.g., v0.1.0
-      - v*
+    branches:
+      - main
 
 jobs:
-  run:
+  version_and_pypi:
     runs-on: ubuntu-latest
     environment:
       name: pypi
     permissions:
+      contents: write
       id-token: write
-      contents: read
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -25,7 +24,22 @@ jobs:
 
       - name: Install Python 3.13
         run: uv python install 3.13
-      - name: Build
-        run: uv build
-      - name: Publish
+      - name: Install python-semantic-release
+        run: uv pip install python-semantic-release
+      - name: Generate version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        id: set-version
+        run: |
+          semantic-release version --no-commit
+          echo "VERSION=$(semantic-release version --print)" >> $GITHUB_ENV
+      - name: Update uv.lock and pyproject.toml with new version
+        run: |
+          uv lock
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add uv.lock pyproject.toml
+          git commit -m "chore(release): release v${{ env.VERSION }}"
+          git push --tags
+      - name: Publish to pypi
         run: uv publish --trusted-publishing always

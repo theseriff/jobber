@@ -1,7 +1,6 @@
 # ruff: noqa: ANN401, ERA001
 # pyright: reportExplicitAny=false
 
-
 import pickle  # nosec B403
 from typing import Any
 

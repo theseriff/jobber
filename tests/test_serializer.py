@@ -1,23 +1,10 @@
-from typing import TypeAlias
-
 import pytest
 
-from iojobs._internal.serializers import (
+from iojobs.serializers import (
     AstLiteralSerializer,
+    AstLiteralTypes,
     IOJobsSerializer,
     UnsafePickleSerializer,
-)
-
-AllowedDataTypes: TypeAlias = (
-    None
-    | bool
-    | int
-    | float
-    | str
-    | bytes
-    | list["AllowedDataTypes"]
-    | tuple["AllowedDataTypes"]
-    | dict[str, "AllowedDataTypes"]
 )
 
 
@@ -43,7 +30,7 @@ AllowedDataTypes: TypeAlias = (
 )
 def test_serialization_all(
     serializer: IOJobsSerializer,
-    data: AllowedDataTypes,
+    data: AstLiteralTypes,
 ) -> None:
     """Tests that all serializers can [de]serialize basic Python types."""
     serialized = serializer.dumpb(data)
