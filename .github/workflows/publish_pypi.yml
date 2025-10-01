@@ -21,7 +21,6 @@ jobs:
         with:
           version: "latest"
           enable-cache: false
-
       - name: Install Python 3.13
         run: uv python install 3.13
       - name: Install python-semantic-release
@@ -29,17 +28,17 @@ jobs:
       - name: Generate version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        id: set-version
+        id: update-version
         run: |
           semantic-release version --no-commit
-          echo "VERSION=$(semantic-release version --print)" >> $GITHUB_ENV
-      - name: Update uv.lock and pyproject.toml with new version
-        run: |
           uv lock
+          echo "VERSION=$(semantic-release version --print)" >> $GITHUB_ENV
+      - name: Push uv.lock and pyproject.toml with new version
+        run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add uv.lock pyproject.toml
           git commit -m "chore(release): release v${{ env.VERSION }}"
-          git push --tags
+          git push && git push --tags
       - name: Publish to pypi
         run: uv publish --trusted-publishing always

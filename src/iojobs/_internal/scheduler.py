@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, overload
 from zoneinfo import ZoneInfo
 
-from iojobs._internal._types import EMPTY
+from iojobs._internal._types import EMPTY, JobDepends
+from iojobs._internal.durable.sqlite import SQLiteJobRepository
 from iojobs._internal.func_wrapper import FuncWrapper
 from iojobs._internal.serializers.ast_literal import AstLiteralSerializer
 
@@ -11,6 +12,7 @@ if TYPE_CHECKING:
     import asyncio
     from collections.abc import Callable
 
+    from iojobs._internal.durable.abc import JobRepository
     from iojobs._internal.job_executor import JobExecutor
     from iojobs._internal.serializers.abc import IOJobsSerializer
 
@@ -28,10 +30,12 @@ class JobScheduler:
         tz: ZoneInfo = EMPTY,
         loop: asyncio.AbstractEventLoop = EMPTY,
         serializer: IOJobsSerializer = EMPTY,
+        durable: JobRepository = EMPTY,
     ) -> None:
         self._wrapper: FuncWrapper[..., Any] = FuncWrapper(  # pyright: ignore[reportExplicitAny]
             loop=loop,
             tz=tz or ZoneInfo("UTC"),
+            durable=durable or SQLiteJobRepository(),
             serializer=serializer or AstLiteralSerializer(),
         )
 
@@ -61,6 +65,9 @@ class JobScheduler:
         if callable(func):
             return wrapper(func)
         return wrapper
+
+    def add_depends(self, **kwargs: JobDepends) -> None:
+        self._wrapper.depends.update(kwargs)
 
     async def wait_for_complete(self) -> None:
         jobs_scheduled = self._wrapper.jobs_registered

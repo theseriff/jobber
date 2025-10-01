@@ -23,5 +23,5 @@ class PersistedJob:
 
 class JobRepository(Protocol, metaclass=ABCMeta):
     @abstractmethod
-    def load_all(self, persisted_job: PersistedJob) -> None:
+    def load_all(self) -> tuple[PersistedJob]:
         raise NotImplementedError

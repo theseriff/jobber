@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Final, Generic, TypeVar, cast
 from uuid import uuid4
 
-from iojobs._internal._types import EMPTY, FuncID
+from iojobs._internal._types import EMPTY, FuncID, JobDepends
 from iojobs._internal.cron_parser import CronParser
 from iojobs._internal.enums import ExecutionMode, JobStatus
 from iojobs._internal.exceptions import (
@@ -121,6 +121,7 @@ class ScheduledJob(Generic[_R]):
 class JobExecutor(ABC, Generic[_R]):
     __slots__: tuple[str, ...] = (
         "_cron_parser",
+        "_depends",
         "_func_id",
         "_func_injected",
         "_is_cron",
@@ -132,7 +133,7 @@ class JobExecutor(ABC, Generic[_R]):
         "_tz",
     )
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         tz: ZoneInfo,
@@ -140,6 +141,7 @@ class JobExecutor(ABC, Generic[_R]):
         func_id: FuncID,
         func_injected: Callable[..., Coroutine[None, None, _R] | _R],
         jobs_registered: list[ScheduledJob[_R]],
+        depends: JobDepends,
     ) -> None:
         self._func_id: FuncID = func_id
         self._func_injected: Callable[..., Coroutine[None, None, _R] | _R] = (
@@ -153,6 +155,7 @@ class JobExecutor(ABC, Generic[_R]):
         self._jobs_registered: Final = jobs_registered
         self._cron_parser: CronParser = EMPTY
         self._is_cron: bool = False
+        self._depends: JobDepends = depends
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -358,6 +361,7 @@ class JobExecutorSync(JobExecutor[_R]):
         jobs_registered: list[ScheduledJob[_R]],
         executors: ExecutorPool,
         tz: ZoneInfo,
+        depends: JobDepends,
     ) -> None:
         self._execution_mode: ExecutionMode = ExecutionMode.MAIN
         self._executors: Final = executors
@@ -367,6 +371,7 @@ class JobExecutorSync(JobExecutor[_R]):
             jobs_registered=jobs_registered,
             func_injected=func_injected,
             tz=tz,
+            depends=depends,
         )
 
     def _execute(self) -> None:
@@ -394,7 +399,7 @@ class JobExecutorSync(JobExecutor[_R]):
 class JobExecutorAsync(JobExecutor[_R]):
     _func_injected: Callable[..., Coroutine[None, None, _R]]
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         loop: asyncio.AbstractEventLoop,
@@ -402,6 +407,7 @@ class JobExecutorAsync(JobExecutor[_R]):
         func_injected: Callable[..., Coroutine[None, None, _R]],
         jobs_registered: list[ScheduledJob[_R]],
         tz: ZoneInfo,
+        depends: JobDepends,
     ) -> None:
         super().__init__(
             loop=loop,
@@ -409,6 +415,7 @@ class JobExecutorAsync(JobExecutor[_R]):
             jobs_registered=jobs_registered,
             func_injected=func_injected,
             tz=tz,
+            depends=depends,
         )
 
     def _execute(self) -> None:

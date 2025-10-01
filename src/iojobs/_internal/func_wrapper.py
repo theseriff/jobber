@@ -14,7 +14,7 @@ from typing import (
 )
 from uuid import uuid4
 
-from iojobs._internal._types import FuncID
+from iojobs._internal._types import FuncID, JobDepends
 from iojobs._internal.executors import ExecutorPool
 from iojobs._internal.job_executor import (
     JobExecutor,
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
     from zoneinfo import ZoneInfo
 
+    from iojobs._internal.durable.abc import JobRepository
     from iojobs._internal.job_executor import ScheduledJob
     from iojobs._internal.serializers.abc import IOJobsSerializer
 
@@ -35,11 +36,13 @@ _R = TypeVar("_R")
 
 class FuncWrapper(Generic[_P, _R]):
     __slots__: tuple[str, ...] = (
+        "_durable",
         "_executors",
         "_func_registered",
         "_loop",
         "_serializer",
         "_tz",
+        "depends",
         "jobs_registered",
     )
 
@@ -49,15 +52,18 @@ class FuncWrapper(Generic[_P, _R]):
         tz: ZoneInfo,
         loop: asyncio.AbstractEventLoop,
         serializer: IOJobsSerializer,
+        durable: JobRepository,
     ) -> None:
         self._executors: Final = ExecutorPool()
         self._loop: Final = loop
         self._func_registered: dict[
             FuncID,
-            Callable[_P, Coroutine[None, None, _R] | _R],
+            Callable[_P, Coroutine[object, object, _R] | _R],
         ] = {}
         self._tz: Final = tz
+        self._durable: JobRepository = durable
         self._serializer: IOJobsSerializer = serializer
+        self.depends: JobDepends = {}
         self.jobs_registered: list[ScheduledJob[_R]] = []
 
     def register(
@@ -65,7 +71,7 @@ class FuncWrapper(Generic[_P, _R]):
         func_id: str | None,
     ) -> Callable[[Callable[_P, _R]], Callable[_P, JobExecutor[_R]]]:
         def wrapper(
-            func: Callable[_P, Coroutine[None, None, _R] | _R],
+            func: Callable[_P, Coroutine[object, object, _R] | _R],
         ) -> Callable[_P, JobExecutor[_R]]:
             fn_id = FuncID(func_id or _create_func_id(func))
             self._func_registered[fn_id] = func
@@ -81,6 +87,7 @@ class FuncWrapper(Generic[_P, _R]):
                         func_injected=func_injected,
                         jobs_registered=self.jobs_registered,
                         tz=self._tz,
+                        depends=self.depends,
                     )
                 else:
                     job = JobExecutorSync(
@@ -90,6 +97,7 @@ class FuncWrapper(Generic[_P, _R]):
                         jobs_registered=self.jobs_registered,
                         tz=self._tz,
                         executors=self._executors,
+                        depends=self.depends,
                     )
                 return job
 
