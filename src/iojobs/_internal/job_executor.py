@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import heapq
-import textwrap
 import traceback
 import warnings
 from abc import ABC, abstractmethod
@@ -75,12 +74,12 @@ class ScheduledJob(Generic[_R]):
         self.status = job_status
 
     def __repr__(self) -> str:
-        return textwrap.dedent(f"""\
-            {self.__class__.__name__}_\
-            (instance_id={id(self)}, \
-            exec_at_timestamp={self.exec_at_timestamp}, \
-            func_id={self.func_id}, job_id={self.job_id})
-        """)
+        return (
+            f"{self.__class__.__qualname__}("
+            f"instance_id={id(self)}, "
+            f"exec_at_timestamp={self.exec_at_timestamp}, "
+            f"func_id={self.func_id}, job_id={self.job_id})"
+        )
 
     def __lt__(self, other: ScheduledJob[_R]) -> bool:
         return self.exec_at_timestamp < other.exec_at_timestamp

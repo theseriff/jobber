@@ -10,10 +10,10 @@ from iojobs._internal.serializers.ast_literal import AstLiteralSerializer
 
 if TYPE_CHECKING:
     import asyncio
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
     from iojobs._internal.durable.abc import JobRepository
-    from iojobs._internal.job_executor import JobExecutor
+    from iojobs._internal.job_executor import JobExecutor, JobExecutorAsync
     from iojobs._internal.serializers.abc import IOJobsSerializer
 
 
@@ -42,19 +42,18 @@ class JobScheduler:
     @overload
     def register(
         self,
-        func: Callable[_P, _R],
-    ) -> Callable[_P, JobExecutor[_R]]: ...
+        func: Callable[_P, Awaitable[_R]],
+    ) -> Callable[_P, JobExecutorAsync[_R]]: ...
 
     @overload
     def register(
         self,
-        *,
-        func_id: str | None = None,
-    ) -> Callable[[Callable[_P, _R]], Callable[_P, JobExecutor[_R]]]: ...
+        func: Callable[_P, _R],
+    ) -> Callable[_P, JobExecutor[_R]]: ...
 
     def register(
         self,
-        func: Callable[_P, _R] | None = None,
+        func: Callable[_P, Awaitable[_R] | _R] | None = None,
         *,
         func_id: str | None = None,
     ) -> (

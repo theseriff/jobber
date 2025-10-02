@@ -73,6 +73,7 @@ class FuncWrapper(Generic[_P, _R]):
         def wrapper(
             func: Callable[_P, Coroutine[object, object, _R] | _R],
         ) -> Callable[_P, JobExecutor[_R]]:
+            _patch_fname(func)
             fn_id = FuncID(func_id or _create_func_id(func))
             self._func_registered[fn_id] = func
 
@@ -117,3 +118,36 @@ def _create_func_id(func: Callable[_P, _R]) -> str:
     if fmodule == "__main__":
         fmodule = sys.argv[0].removesuffix(".py").replace(os.path.sep, ".")
     return f"{fmodule}:{fname}"
+
+
+def _patch_fname(original_func: Callable[_P, _R]) -> None:
+    # This is a hack to make ProcessPoolExecutor work
+    # with decorated functions.
+    #
+    # The problem is that when we decorate a function
+    # it becomes a new class. This class has the same
+    # name as the original function.
+    #
+    # When receiver sends original function to another
+    # process, it will have the same name as the decorated
+    # class. This will cause an error, because ProcessPoolExecutor
+    # uses `__name__` and `__qualname__` attributes to
+    # import functions from other processes and then it verifies
+    # that the function is the same as the original one.
+    #
+    # This hack renames the original function and injects
+    # it back to the module where it was defined.
+    # This way ProcessPoolExecutor will be able to import
+    # the function by it's name and verify its correctness.
+    new_name = f"{original_func.__name__}__iojobs_original"
+    original_func.__name__ = new_name
+    if hasattr(original_func, "__qualname__"):
+        original_qualname = original_func.__qualname__.rsplit(".")
+        original_qualname[-1] = new_name
+        new_qualname = ".".join(original_qualname)
+        original_func.__qualname__ = new_qualname
+    setattr(
+        sys.modules[original_func.__module__],
+        new_name,
+        original_func,
+    )

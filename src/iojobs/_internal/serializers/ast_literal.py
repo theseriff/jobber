@@ -10,6 +10,7 @@ AstLiteralTypes: TypeAlias = (
     | float
     | str
     | bytes
+    | set["AstLiteralTypes"]
     | list["AstLiteralTypes"]
     | tuple["AstLiteralTypes"]
     | dict[str, "AstLiteralTypes"]
