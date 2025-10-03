@@ -16,10 +16,10 @@ from uuid import uuid4
 
 from iojobs._internal._types import FuncID, JobDepends
 from iojobs._internal.executors import ExecutorPool
-from iojobs._internal.job_executor import (
-    JobExecutor,
-    JobExecutorAsync,
-    JobExecutorSync,
+from iojobs._internal.job_runner import (
+    JobRunner,
+    JobRunnerAsync,
+    JobRunnerSync,
 )
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from zoneinfo import ZoneInfo
 
     from iojobs._internal.durable.abc import JobRepository
-    from iojobs._internal.job_executor import ScheduledJob
+    from iojobs._internal.job_runner import ScheduledJob
     from iojobs._internal.serializers.abc import IOJobsSerializer
 
 _P = ParamSpec("_P")
@@ -69,20 +69,20 @@ class FuncWrapper(Generic[_P, _R]):
     def register(
         self,
         func_id: str | None,
-    ) -> Callable[[Callable[_P, _R]], Callable[_P, JobExecutor[_R]]]:
+    ) -> Callable[[Callable[_P, _R]], Callable[_P, JobRunner[_R]]]:
         def wrapper(
             func: Callable[_P, Coroutine[object, object, _R] | _R],
-        ) -> Callable[_P, JobExecutor[_R]]:
+        ) -> Callable[_P, JobRunner[_R]]:
             _patch_fname(func)
             fn_id = FuncID(func_id or _create_func_id(func))
             self._func_registered[fn_id] = func
 
             @functools.wraps(func)
-            def inner(*args: _P.args, **kwargs: _P.kwargs) -> JobExecutor[_R]:
-                job: JobExecutor[_R]
+            def inner(*args: _P.args, **kwargs: _P.kwargs) -> JobRunner[_R]:
+                job: JobRunner[_R]
                 func_injected = functools.partial(func, *args, **kwargs)
                 if asyncio.iscoroutinefunction(func_injected):
-                    job = JobExecutorAsync(
+                    job = JobRunnerAsync(
                         loop=self._loop,
                         func_id=fn_id,
                         func_injected=func_injected,
@@ -91,7 +91,7 @@ class FuncWrapper(Generic[_P, _R]):
                         depends=self.depends,
                     )
                 else:
-                    job = JobExecutorSync(
+                    job = JobRunnerSync(
                         loop=self._loop,
                         func_id=fn_id,
                         func_injected=cast("Callable[_P, _R]", func_injected),

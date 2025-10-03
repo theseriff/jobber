@@ -6,7 +6,7 @@ import traceback
 import warnings
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Final, Generic, TypeVar, cast
+from typing import TYPE_CHECKING, Final, Generic, TypeVar
 from uuid import uuid4
 
 from iojobs._internal._types import EMPTY, FuncID, JobDepends
@@ -117,7 +117,7 @@ class ScheduledJob(Generic[_R]):
         self._event.set()
 
 
-class JobExecutor(ABC, Generic[_R]):
+class JobRunner(ABC, Generic[_R]):
     __slots__: tuple[str, ...] = (
         "_cron_parser",
         "_depends",
@@ -173,26 +173,23 @@ class JobExecutor(ABC, Generic[_R]):
         raise NotImplementedError
 
     @abstractmethod
-    def to_thread(self) -> JobExecutor[_R]:
+    def to_thread(self) -> JobRunner[_R]:
         raise NotImplementedError
 
     @abstractmethod
-    def to_process(self) -> JobExecutor[_R]:
+    def to_process(self) -> JobRunner[_R]:
         raise NotImplementedError
 
-    def on_success(self, *callbacks: Callable[[_R], None]) -> JobExecutor[_R]:
+    def on_success(self, *callbacks: Callable[[_R], None]) -> JobRunner[_R]:
         self._on_success_callback.extend(callbacks)
         return self
 
     def on_error(
         self,
         *callbacks: Callable[[Exception], None],
-    ) -> JobExecutor[_R]:
+    ) -> JobRunner[_R]:
         self._on_error_callback.extend(callbacks)
         return self
-
-    def call(self) -> _R:
-        return cast("_R", self._func_injected())
 
     def cron(
         self,
@@ -347,7 +344,7 @@ class JobExecutor(ABC, Generic[_R]):
                 traceback.print_exc()
 
 
-class JobExecutorSync(JobExecutor[_R]):
+class JobRunnerSync(JobRunner[_R]):
     __slots__: tuple[str, ...] = ("_execution_mode", "_executors")
     _func_injected: Callable[..., _R]
 
@@ -386,16 +383,16 @@ class JobExecutorSync(JobExecutor[_R]):
         else:
             self._set_result(self._func_injected)
 
-    def to_thread(self) -> JobExecutor[_R]:
+    def to_thread(self) -> JobRunner[_R]:
         self._execution_mode = ExecutionMode.THREAD
         return self
 
-    def to_process(self) -> JobExecutor[_R]:
+    def to_process(self) -> JobRunner[_R]:
         self._execution_mode = ExecutionMode.PROCESS
         return self
 
 
-class JobExecutorAsync(JobExecutor[_R]):
+class JobRunnerAsync(JobRunner[_R]):
     _func_injected: Callable[..., Coroutine[None, None, _R]]
 
     def __init__(  # noqa: PLR0913
@@ -421,7 +418,7 @@ class JobExecutorAsync(JobExecutor[_R]):
         coro_task = asyncio.create_task(self._func_injected())
         coro_task.add_done_callback(self._set_result)
 
-    def to_thread(self) -> JobExecutorAsync[_R]:
+    def to_thread(self) -> JobRunnerAsync[_R]:
         warnings.warn(
             ASYNC_FUNC_IGNORED_WARNING.format(fname="to_thread"),
             category=RuntimeWarning,
@@ -429,7 +426,7 @@ class JobExecutorAsync(JobExecutor[_R]):
         )
         return self
 
-    def to_process(self) -> JobExecutor[_R]:
+    def to_process(self) -> JobRunner[_R]:
         warnings.warn(
             ASYNC_FUNC_IGNORED_WARNING.format(fname="to_process"),
             category=RuntimeWarning,

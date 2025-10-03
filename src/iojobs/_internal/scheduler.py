@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from iojobs._internal.durable.abc import JobRepository
-    from iojobs._internal.job_executor import JobExecutor, JobExecutorAsync
+    from iojobs._internal.job_runner import JobRunner, JobRunnerAsync
     from iojobs._internal.serializers.abc import IOJobsSerializer
 
 
@@ -43,13 +43,13 @@ class JobScheduler:
     def register(
         self,
         func: Callable[_P, Awaitable[_R]],
-    ) -> Callable[_P, JobExecutorAsync[_R]]: ...
+    ) -> Callable[_P, JobRunnerAsync[_R]]: ...
 
     @overload
     def register(
         self,
         func: Callable[_P, _R],
-    ) -> Callable[_P, JobExecutor[_R]]: ...
+    ) -> Callable[_P, JobRunner[_R]]: ...
 
     def register(
         self,
@@ -57,8 +57,8 @@ class JobScheduler:
         *,
         func_id: str | None = None,
     ) -> (
-        Callable[_P, JobExecutor[_R]]
-        | Callable[[Callable[_P, _R]], Callable[_P, JobExecutor[_R]]]
+        Callable[_P, JobRunner[_R]]
+        | Callable[[Callable[_P, _R]], Callable[_P, JobRunner[_R]]]
     ):
         wrapper = self._wrapper.register(func_id)
         if callable(func):
