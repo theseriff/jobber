@@ -3,7 +3,7 @@ import pytest
 from iojobs.serializers import (
     AstLiteralSerializer,
     AstLiteralTypes,
-    IOJobsSerializer,
+    JobsSerializer,
     UnsafePickleSerializer,
 )
 
@@ -29,7 +29,7 @@ from iojobs.serializers import (
     ],
 )
 def test_serialization_all(
-    serializer: IOJobsSerializer,
+    serializer: JobsSerializer,
     data: AstLiteralTypes,
 ) -> None:
     """Tests that all serializers can [de]serialize basic Python types."""

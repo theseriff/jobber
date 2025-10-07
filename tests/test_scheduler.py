@@ -19,8 +19,8 @@ async def f2(num: int) -> int:
 
 
 async def test_scheduler_delay() -> None:
-    scheduled_job1 = f1(1).to_process().delay(0)
-    scheduled_job2 = f2(1).delay(0)
+    scheduled_job1 = f1.schedule(1).to_process().delay(0)
+    scheduled_job2 = f2.schedule(1).delay(0)
     _ = await asyncio.gather(scheduled_job1.wait(), scheduled_job2.wait())
     expected_val = 2
     assert scheduled_job1.result == expected_val
@@ -29,8 +29,8 @@ async def test_scheduler_delay() -> None:
 
 async def test_scheduler_at() -> None:
     now = datetime.now(tz=TZ_UTC) + timedelta(microseconds=300)
-    scheduled_job1 = f1(2).at(now)
-    scheduled_job2 = f2(2).at(now)
+    scheduled_job1 = f1.schedule(2).at(now)
+    scheduled_job2 = f2.schedule(2).at(now)
     _ = await asyncio.gather(scheduled_job1.wait(), scheduled_job2.wait())
     expected_val = 3
     assert scheduled_job1.result == expected_val

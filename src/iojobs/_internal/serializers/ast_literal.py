@@ -1,7 +1,7 @@
 import ast
 from typing import TypeAlias, cast
 
-from iojobs._internal.serializers.abc import IOJobsSerializer
+from iojobs._internal.serializers.abc import JobsSerializer
 
 AstLiteralTypes: TypeAlias = (
     None
@@ -17,7 +17,7 @@ AstLiteralTypes: TypeAlias = (
 )
 
 
-class AstLiteralSerializer(IOJobsSerializer):
+class AstLiteralSerializer(JobsSerializer):
     def dumpb(self, value: AstLiteralTypes) -> bytes:
         return repr(value).encode(encoding="utf-8")
 

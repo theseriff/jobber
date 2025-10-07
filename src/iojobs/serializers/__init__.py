@@ -34,7 +34,7 @@ Examples:
 
 from iojobs._internal.serializers import (
     AstLiteralSerializer,
-    IOJobsSerializer,
+    JobsSerializer,
     UnsafePickleSerializer,
 )
 from iojobs._internal.serializers.ast_literal import AstLiteralTypes
@@ -42,6 +42,6 @@ from iojobs._internal.serializers.ast_literal import AstLiteralTypes
 __all__ = (
     "AstLiteralSerializer",
     "AstLiteralTypes",
-    "IOJobsSerializer",
+    "JobsSerializer",
     "UnsafePickleSerializer",
 )

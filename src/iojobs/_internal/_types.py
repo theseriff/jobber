@@ -1,5 +1,5 @@
 # pyright: reportExplicitAny=false
-from typing import Any, NewType, TypeAlias
+from typing import Any
 
 
 class EmptyPlaceholder:
@@ -17,7 +17,3 @@ class EmptyPlaceholder:
 
 
 EMPTY: Any = EmptyPlaceholder()
-
-FuncID = NewType("FuncID", str)
-
-JobDepends: TypeAlias = dict[str, Any]

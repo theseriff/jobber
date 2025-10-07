@@ -4,10 +4,10 @@
 import pickle  # nosec B403
 from typing import Any
 
-from iojobs._internal.serializers.abc import IOJobsSerializer
+from iojobs._internal.serializers.abc import JobsSerializer
 
 
-class UnsafePickleSerializer(IOJobsSerializer):
+class UnsafePickleSerializer(JobsSerializer):
     def dumpb(self, value: Any) -> bytes:
         # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
         return pickle.dumps(value)
