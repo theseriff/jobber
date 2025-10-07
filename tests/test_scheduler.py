@@ -1,37 +1,87 @@
+# pyright: reportPrivateUsage=false
 import asyncio
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
+from datetime import datetime
+from typing import TypedDict
+from unittest import mock
 
-from iojobs._internal.scheduler import JobScheduler
+import pytest
 
-TZ_UTC = ZoneInfo("UTC")
-scheduler = JobScheduler(tz=TZ_UTC)
+from iojobs import ExecutionMode, JobScheduler
+from iojobs._internal.cron_parser import CronParser
 
 
-@scheduler.register
+class CommonKwargs(TypedDict):
+    now: datetime
+    execution_mode: ExecutionMode
+
+
 def f1(num: int) -> int:
     return num + 1
 
 
-@scheduler.register
 async def f2(num: int) -> int:
     return num + 1
 
 
-async def test_scheduler_delay() -> None:
-    scheduled_job1 = f1.schedule(1).to_process().delay(0)
-    scheduled_job2 = f2.schedule(1).delay(0)
-    _ = await asyncio.gather(scheduled_job1.wait(), scheduled_job2.wait())
-    expected_val = 2
-    assert scheduled_job1.result == expected_val
-    assert scheduled_job2.result == expected_val
+@pytest.fixture(scope="session")
+async def scheduler() -> JobScheduler:
+    return JobScheduler()
 
 
-async def test_scheduler_at() -> None:
-    now = datetime.now(tz=TZ_UTC) + timedelta(microseconds=300)
-    scheduled_job1 = f1.schedule(2).at(now)
-    scheduled_job2 = f2.schedule(2).at(now)
-    _ = await asyncio.gather(scheduled_job1.wait(), scheduled_job2.wait())
-    expected_val = 3
-    assert scheduled_job1.result == expected_val
-    assert scheduled_job2.result == expected_val
+@pytest.mark.parametrize(
+    "execution_mode",
+    [
+        pytest.param(ExecutionMode.MAIN, id="main"),
+        pytest.param(ExecutionMode.THREAD, id="thread"),
+        pytest.param(ExecutionMode.PROCESS, id="process"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("method", "num", "expected"),
+    [
+        pytest.param("at", 1, 2),
+        pytest.param("cron", 3, 4),
+        pytest.param("delay", 2, 3),
+    ],
+)
+@pytest.mark.filterwarnings(
+    "ignore:.*fork.*:DeprecationWarning",
+    "ignore:.*(to_thread|to_process).*:RuntimeWarning",
+)
+async def test_scheduler(  # noqa: PLR0913
+    scheduler: JobScheduler,
+    now: datetime,
+    *,
+    method: str,
+    num: int,
+    expected: int,
+    execution_mode: ExecutionMode,
+) -> None:
+    common_kwargs = CommonKwargs(now=now, execution_mode=execution_mode)
+    f1_reg = scheduler.register(f1, func_name="f1_reg")
+    f2_reg = scheduler.register(f2, func_name="f2_reg")
+    if method == "at":
+        job_sync = await f1_reg.schedule(num).at(now, **common_kwargs)
+        job_async = await f2_reg.schedule(num).at(now, **common_kwargs)
+    elif method == "delay":
+        job_sync = await f1_reg.schedule(num).delay(0, **common_kwargs)
+        job_async = await f2_reg.schedule(num).delay(0, **common_kwargs)
+    elif method == "cron":
+        with mock.patch.object(CronParser, "next_run", return_value=now) as m:
+            job_sync = await f1_reg.schedule(num).cron(
+                "* * * * *",
+                **common_kwargs,
+            )
+            job_async = await f2_reg.schedule(num).cron(
+                "* * * * *",
+                **common_kwargs,
+            )
+        m.assert_has_calls(calls=[mock.call(now=now), mock.call(now=now)])
+    else:
+        raise NotImplementedError
+
+    _ = await asyncio.gather(job_sync.wait(), job_async.wait())
+    assert job_sync.result() == expected
+    assert job_async.result() == expected
+    assert scheduler._asyncio_tasks == []
+    assert scheduler._jobs_registered == []

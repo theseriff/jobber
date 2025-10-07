@@ -13,4 +13,4 @@ class JobStatus(str, Enum):
     SCHEDULED = "scheduled"
     CANCELED = "canceled"
     SUCCESS = "success"
-    ERROR = "error"
+    FAILED = "failed"

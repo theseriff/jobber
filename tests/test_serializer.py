@@ -10,22 +10,25 @@ from iojobs.serializers import (
 
 @pytest.mark.parametrize(
     "serializer",
-    [AstLiteralSerializer(), UnsafePickleSerializer()],
+    [
+        pytest.param(AstLiteralSerializer()),
+        pytest.param(UnsafePickleSerializer()),
+    ],
 )
 @pytest.mark.parametrize(
     "data",
     [
-        None,
-        True,
-        False,
-        123,
-        123.45,
-        "hello",
-        b"world",
-        [1, "a", None, [2, "b", True]],
-        (1, "a", None, (2, "b", True)),
-        {"a": 1, "b": None},
-        {1, "a", None},
+        pytest.param(None),
+        pytest.param(True),
+        pytest.param(False),
+        pytest.param(123),
+        pytest.param(123.45),
+        pytest.param("hello"),
+        pytest.param(b"world"),
+        pytest.param([1, "a", None, [2, "b", True]]),
+        pytest.param((1, "a", None, (2, "b", True))),
+        pytest.param({"a": 1, "b": None}),
+        pytest.param({1, "a", None}),
     ],
 )
 def test_serialization_all(

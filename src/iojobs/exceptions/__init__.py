@@ -6,16 +6,16 @@ about errors and guidance on how to handle common scheduling scenarios.
 """
 
 from iojobs._internal.exceptions import (
-    ConcurrentExecutionError,
     IOJobsBaseError,
+    JobFailedError,
     JobNotCompletedError,
     JobNotInitializedError,
     NegativeDelayError,
 )
 
 __all__ = (
-    "ConcurrentExecutionError",
     "IOJobsBaseError",
+    "JobFailedError",
     "JobNotCompletedError",
     "JobNotInitializedError",
     "NegativeDelayError",
