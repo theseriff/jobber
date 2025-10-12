@@ -42,7 +42,10 @@ classifiers = [
     "Topic :: Documentation",
     "Topic :: Utilities",
 ]
-dependencies = ["crontab==1.0.5"]
+dependencies = [
+    "crontab==1.0.5",
+    "tzdata==2025.2; sys_platform == 'win32'",
+]
 
 [dependency-groups]
 lint = [

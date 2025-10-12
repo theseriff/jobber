@@ -44,10 +44,7 @@ async def scheduler() -> JobScheduler:
         pytest.param("delay", 2, 3),
     ],
 )
-@pytest.mark.filterwarnings(
-    "ignore:.*fork.*:DeprecationWarning",
-    "ignore:.*(to_thread|to_process).*:RuntimeWarning",
-)
+@pytest.mark.filterwarnings("ignore:.*(to_thread|to_process).*:RuntimeWarning")
 async def test_scheduler(  # noqa: PLR0913
     scheduler: JobScheduler,
     now: datetime,

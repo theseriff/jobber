@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import heapq
 import traceback
 import warnings
@@ -131,7 +132,8 @@ class Job(Generic[_R]):
     def cancel(self) -> None:
         self.status = JobStatus.CANCELED
         self._timer_handler.cancel()
-        self._job_registered.remove(self)
+        with contextlib.suppress(ValueError):
+            self._job_registered.remove(self)
         self._event.set()
 
 

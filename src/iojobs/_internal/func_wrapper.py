@@ -81,8 +81,11 @@ class FuncWrapper(Generic[_P, _R]):
         # This way ProcessPoolExecutor will be able to import
         # the function by it's name and verify its correctness.
         if original_func.__name__.endswith("iojobs_original"):
-            return  # skip if a new name has been set.
-
+            return
+        module = sys.modules[original_func.__module__]
+        module_attr = getattr(module, original_func.__name__, None)
+        if module_attr is original_func:
+            return
         new_name = f"{original_func.__name__}__iojobs_original"
         original_func.__name__ = new_name
         if hasattr(original_func, "__qualname__"):  # pragma: no cover
@@ -90,11 +93,7 @@ class FuncWrapper(Generic[_P, _R]):
             original_qualname[-1] = new_name
             new_qualname = ".".join(original_qualname)
             original_func.__qualname__ = new_qualname
-        setattr(
-            sys.modules[original_func.__module__],
-            new_name,
-            original_func,
-        )
+        setattr(module, new_name, original_func)
 
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         return self._original_func(*args, **kwargs)

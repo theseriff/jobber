@@ -74,5 +74,5 @@ jobs:
 
       - name: Install Dependencies and library
         run: just init
-      #- name: Run all tests
-      #run: uv run --active --frozen pytest --cov --cov-report=term:skip-covered
+      - name: Run all tests
+        run: just test-coverage-all

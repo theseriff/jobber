@@ -1,4 +1,5 @@
-import concurrent.futures
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 from iojobs._internal._types import EMPTY
 
@@ -7,19 +8,20 @@ class ExecutorPool:  # pragma: no cover
     __slots__: tuple[str, ...] = ("_processpool", "_threadpool")
 
     def __init__(self) -> None:
-        self._processpool: concurrent.futures.ProcessPoolExecutor = EMPTY
-        self._threadpool: concurrent.futures.ThreadPoolExecutor = EMPTY
+        self._processpool: ProcessPoolExecutor = EMPTY
+        self._threadpool: ThreadPoolExecutor = EMPTY
 
     @property
-    def processpool_executor(self) -> concurrent.futures.ProcessPoolExecutor:
+    def processpool_executor(self) -> ProcessPoolExecutor:
         if self._processpool is EMPTY:
-            self._processpool = concurrent.futures.ProcessPoolExecutor()
+            mp_ctx = multiprocessing.get_context("spawn")
+            self._processpool = ProcessPoolExecutor(mp_context=mp_ctx)
         return self._processpool
 
     @property
-    def threadpool_executor(self) -> concurrent.futures.ThreadPoolExecutor:
+    def threadpool_executor(self) -> ThreadPoolExecutor:
         if self._threadpool is EMPTY:
-            self._threadpool = concurrent.futures.ThreadPoolExecutor()
+            self._threadpool = ThreadPoolExecutor()
         return self._threadpool
 
     def shutdown(self) -> None:

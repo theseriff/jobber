@@ -1,6 +1,5 @@
 from datetime import datetime
-from typing import Final, TypedDict
-from zoneinfo import ZoneInfo
+from typing import TypedDict
 
 import pytest
 
@@ -18,8 +17,7 @@ class CommonKwargs(TypedDict):
     to_process: bool
 
 
-TZ_UTC: Final = ZoneInfo("UTC")
-scheduler = JobScheduler(tz=TZ_UTC)
+scheduler = JobScheduler()
 
 
 @scheduler.register(func_name="f1")
