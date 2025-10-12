@@ -50,12 +50,12 @@ dependencies = [
 [dependency-groups]
 lint = [
     "mypy==1.18.2",
-    "ruff==0.13.3",
+    "ruff==0.14.0",
     "bandit==1.8.6",
     "zizmor==1.14.2",
     "semgrep==1.139.0",
     "codespell==2.4.1",
-    "basedpyright==1.31.6",
+    "basedpyright==1.31.7",
     # mypy extensions
     "mypy-extensions==1.1.0",
     "types-setuptools",
