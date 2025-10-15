@@ -28,7 +28,7 @@ from iojobs._internal.exceptions import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine
+    from collections.abc import Awaitable, Callable
     from zoneinfo import ZoneInfo
 
     from iojobs._internal.command_runner import CommandRunner
@@ -159,16 +159,13 @@ class JobRunner(ABC, Generic[_R]):
         tz: ZoneInfo,
         loop: asyncio.AbstractEventLoop,
         func_name: str,
-        func_injected: Callable[..., Coroutine[object, object, _R] | _R],
+        func_injected: Callable[..., Awaitable[_R] | _R],
         jobs_registered: list[Job[_R]],
         asyncio_tasks: list[asyncio.Task[_R]],
         extras: JobExtras,
     ) -> None:
         self._func_name: str = func_name
-        self._func_injected: Callable[
-            ...,
-            Coroutine[object, object, _R] | _R,
-        ] = func_injected
+        self._func_injected: Callable[..., Awaitable[_R] | _R] = func_injected
         self._tz: Final = tz
         self._loop: asyncio.AbstractEventLoop = loop
         self._on_success_callback: list[Callable[[_R], None]] = []
@@ -227,7 +224,7 @@ class JobRunner(ABC, Generic[_R]):
         execution_mode: ExecutionMode,
     ) -> Job[_R]:
         next_run = self._cron_parser.next_run(now=now)
-        return await self._at_execute(
+        return await self._at(
             at=next_run,
             now=now,
             job_id=EMPTY,
@@ -245,7 +242,7 @@ class JobRunner(ABC, Generic[_R]):
     ) -> Job[_R]:
         now = now or datetime.now(tz=self._tz)
         at = now + timedelta(seconds=delay_seconds)
-        return await self._at_execute(
+        return await self._at(
             now=now,
             at=at,
             job_id=job_id,
@@ -262,14 +259,14 @@ class JobRunner(ABC, Generic[_R]):
         execution_mode: ExecutionMode = ExecutionMode.MAIN,
     ) -> Job[_R]:
         now = now or datetime.now(tz=at.tzinfo)
-        return await self._at_execute(
+        return await self._at(
             now=now,
             at=at,
             job_id=job_id,
             execution_mode=execution_mode,
         )
 
-    async def _at_execute(
+    async def _at(
         self,
         *,
         now: datetime,
@@ -316,7 +313,7 @@ class JobRunner(ABC, Generic[_R]):
         self,
         *,
         cmd: CommandRunner[_R],
-        execution_mode: ExecutionMode,
+        exec_mode: ExecutionMode,
     ) -> _R:
         job = self.job
         try:
@@ -341,7 +338,7 @@ class JobRunner(ABC, Generic[_R]):
             if self._is_cron:
                 _ = await self._schedule_cron(
                     now=datetime.now(tz=self._tz),
-                    execution_mode=execution_mode,
+                    execution_mode=exec_mode,
                 )
 
     def on_success(self, *callbacks: Callable[[_R], None]) -> JobRunner[_R]:
@@ -408,13 +405,13 @@ class JobRunnerSync(JobRunner[_R]):
                 pass
 
         cmd: SyncRunner[_R] | ExecutorPoolRunner[_R]
-        if executor is EMPTY:
-            cmd = SyncRunner(self._func_injected)
-        else:
+        if executor is not EMPTY:
             cmd = ExecutorPoolRunner(self._func_injected, executor, self.loop)
+        else:
+            cmd = SyncRunner(self._func_injected)
 
         task = asyncio.create_task(
-            self._runner(cmd=cmd, execution_mode=execution_mode),
+            self._runner(cmd=cmd, exec_mode=execution_mode),
         )
         self._asyncio_tasks.append(task)
 
@@ -426,7 +423,7 @@ class JobRunnerSync(JobRunner[_R]):
 
 
 class JobRunnerAsync(JobRunner[_R]):
-    _func_injected: Callable[..., Coroutine[object, object, _R]]
+    _func_injected: Callable[..., Awaitable[_R]]
 
     def __init__(  # noqa: PLR0913
         self,
@@ -434,7 +431,7 @@ class JobRunnerAsync(JobRunner[_R]):
         tz: ZoneInfo,
         loop: asyncio.AbstractEventLoop,
         func_name: str,
-        func_injected: Callable[..., Coroutine[object, object, _R]],
+        func_injected: Callable[..., Awaitable[_R]],
         jobs_registered: list[Job[_R]],
         asyncio_tasks: list[asyncio.Task[_R]],
         extras: JobExtras,
@@ -455,10 +452,7 @@ class JobRunnerAsync(JobRunner[_R]):
 
         cmd = AsyncRunner(self._func_injected)
         task = asyncio.create_task(
-            self._runner(
-                cmd=cmd,
-                execution_mode=execution_mode,
-            ),
+            self._runner(cmd=cmd, exec_mode=execution_mode),
         )
         self._asyncio_tasks.append(task)
 
