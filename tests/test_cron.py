@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest import mock
 from zoneinfo import ZoneInfo
 
@@ -10,8 +10,7 @@ def test_cronparser() -> None:
     cron = CronParser("@daily")
     now = datetime.now(tz=ZoneInfo("Europe/Moscow"))
     next_run = cron.next_run(now=now)
-    expected_run = now.replace(
-        day=now.day + 1,
+    expected_run = (now + timedelta(days=1)).replace(
         hour=0,
         minute=0,
         second=0,
