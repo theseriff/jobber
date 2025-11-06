@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
     from types import CoroutineType
 
-    from iojobs._internal._inner_deps import JobInnerDeps
+    from iojobs._internal._inner_context import JobInnerContext
     from iojobs._internal.job_runner import Job
 
 
@@ -36,13 +36,15 @@ class FuncWrapper(Generic[_P, _R]):
         self,
         *,
         func_name: str,
-        inner_deps: JobInnerDeps,
+        inner_deps: JobInnerContext,
         original_func: Callable[_P, _R],
         jobs_registered: dict[str, Job[_R]],
     ) -> None:
         self._func_name: str = func_name
-        self._inner_deps: JobInnerDeps = inner_deps
+        self._inner_deps: JobInnerContext = inner_deps
         self._jobs_registered: dict[str, Job[_R]] = jobs_registered
+        self._on_success_callback: list[Callable[[_R], None]] = []
+        self._on_error_callback: list[Callable[[Exception], None]] = []
         self._original_func: Callable[_P, _R] = original_func
         # This is a hack to make ProcessPoolExecutor work
         # with decorated functions.

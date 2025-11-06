@@ -4,7 +4,7 @@ import functools
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast, overload
 from zoneinfo import ZoneInfo
 
-from iojobs._internal._inner_deps import ExecutorsPool, JobInnerDeps
+from iojobs._internal._inner_context import ExecutorsPool, JobInnerContext
 from iojobs._internal.durable.sqlite import SQLiteJobRepository
 from iojobs._internal.func_wrapper import FuncWrapper, create_default_name
 from iojobs._internal.serializers.ast_literal import AstLiteralSerializer
@@ -26,7 +26,7 @@ _R = TypeVar("_R")
 class JobScheduler:
     __slots__: tuple[str, ...] = (
         "_func_registered",
-        "_inner_deps",
+        "_inner_ctx",
         "_jobs_registered",
     )
 
@@ -40,7 +40,7 @@ class JobScheduler:
         threadpool_executor: ThreadPoolExecutor | None = None,
         processpool_executor: ProcessPoolExecutor | None = None,
     ) -> None:
-        self._inner_deps: JobInnerDeps = JobInnerDeps(
+        self._inner_ctx: JobInnerContext = JobInnerContext(
             _loop=loop,
             tz=tz or ZoneInfo("UTC"),
             durable=durable or SQLiteJobRepository(),
@@ -97,7 +97,7 @@ class JobScheduler:
                 return cast("FuncWrapper[_P, _R]", fwrapper)
             fwrapper = FuncWrapper(
                 func_name=fname,
-                inner_deps=self._inner_deps,
+                inner_deps=self._inner_ctx,
                 original_func=func,
                 jobs_registered=self._jobs_registered,
             )
@@ -108,4 +108,4 @@ class JobScheduler:
         return wrapper
 
     def shutdown(self) -> None:
-        self._inner_deps.close()
+        self._inner_ctx.close()

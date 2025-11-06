@@ -28,7 +28,7 @@ from iojobs._internal.exceptions import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from iojobs._internal._inner_deps import JobInnerDeps
+    from iojobs._internal._inner_context import JobInnerContext
     from iojobs._internal.command_runner import CommandRunner
 
 
@@ -157,12 +157,12 @@ class JobRunner(ABC, Generic[_R]):
         self,
         *,
         func_name: str,
-        inner_deps: JobInnerDeps,
+        inner_deps: JobInnerContext,
         func_injected: Callable[..., Awaitable[_R] | _R],
         jobs_registered: dict[str, Job[_R]],
     ) -> None:
         self._func_name: str = func_name
-        self._inner_deps: JobInnerDeps = inner_deps
+        self._inner_deps: JobInnerContext = inner_deps
         self._func_injected: Callable[..., Awaitable[_R] | _R] = func_injected
         self._on_success_callback: list[Callable[[_R], None]] = []
         self._on_error_callback: list[Callable[[Exception], None]] = []
