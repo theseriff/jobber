@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    ParamSpec,
+    TypeVar,
+    cast,
+    overload,
+)
 from zoneinfo import ZoneInfo
 
 from iojobs._internal._inner_context import ExecutorsPool, JobInnerContext
+from iojobs._internal.durable.dummy import DummyRepository
 from iojobs._internal.durable.sqlite import SQLiteJobRepository
 from iojobs._internal.func_wrapper import FuncWrapper, create_default_name
 from iojobs._internal.serializers.json import JSONSerializer
@@ -25,28 +34,25 @@ _R = TypeVar("_R")
 
 
 class JobScheduler:
-    __slots__: tuple[str, ...] = (
-        "_func_registered",
-        "_inner_ctx",
-        "_jobs_registered",
-    )
-
     def __init__(  # noqa: PLR0913
         self,
         *,
         tz: ZoneInfo | None = None,
         loop: asyncio.AbstractEventLoop | None = None,
-        durable: JobRepository | None = None,
+        durable: JobRepository | Literal[False] | None = None,
         lifespan: Lifespan | None = None,
         serializer: JobsSerializer | None = None,
         threadpool_executor: ThreadPoolExecutor | None = None,
         processpool_executor: ProcessPoolExecutor | None = None,
     ) -> None:
-        _ = lifespan
+        if durable is False:
+            durable = DummyRepository()
+        elif durable is None:
+            durable = SQLiteJobRepository()
         self._inner_ctx: JobInnerContext = JobInnerContext(
             _loop=loop,
             tz=tz or ZoneInfo("UTC"),
-            durable=durable or SQLiteJobRepository(),
+            durable=durable,
             executors=ExecutorsPool(
                 _threadpool=threadpool_executor,
                 _processpool=processpool_executor,
@@ -55,6 +61,7 @@ class JobScheduler:
             asyncio_tasks=set(),
             extras={},
         )
+        self._lifespan: Lifespan | None = lifespan
         self._func_registered: dict[str, FuncWrapper[..., Any]] = {}  # pyright: ignore[reportExplicitAny]
         self._jobs_registered: dict[str, Job[Any]] = {}  # pyright: ignore[reportExplicitAny]
 

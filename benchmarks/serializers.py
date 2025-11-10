@@ -149,11 +149,11 @@ def serializers_measure() -> dict[str, dict[str, float]]:
     results: dict[str, float] = {}
     common_globs = {"serializer_case": serializer_case}
     stmt = "for _ in range(100): serializer_case(serializer)"
-    for k, serializer in {
+    for name, serializer in {
         "json": JSONSerializer(),
         "pickle": UnsafePickleSerializer(),
     }.items():
         globs = common_globs | {"serializer": serializer}
-        results[k] = timeit(stmt, globals=globs, number=1000)
+        results[name] = timeit(stmt, globals=globs, number=1000)
     results = dict(sorted(results.items(), key=lambda item: item[1]))
     return {"serializers": results}

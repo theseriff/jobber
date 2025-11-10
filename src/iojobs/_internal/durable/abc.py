@@ -1,7 +1,8 @@
 from abc import ABCMeta, abstractmethod
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from iojobs._internal.constants import ExecutionMode, JobStatus
 
@@ -21,7 +22,8 @@ class JobPersisted:
     error: str | None = None
 
 
+@runtime_checkable
 class JobRepository(Protocol, metaclass=ABCMeta):
     @abstractmethod
-    def load_all(self) -> tuple[JobPersisted]:
+    def load_all(self) -> Iterable[JobPersisted]:
         raise NotImplementedError

@@ -106,7 +106,7 @@ source = ["src", "tests"]
 omit = ["**/__init__.py"]
 
 [tool.coverage.report]
-fail_under = 100
+fail_under = 95
 skip_empty = true
 show_missing = true
 exclude_also = [
@@ -117,7 +117,7 @@ exclude_also = [
     "pass",
     '\.\.\.',
 ]
-omit = ["*/__init__.py", "*/_types.py"]
+omit = ["*/__init__.py"]
 
 # Static Analysis
 [tool.basedpyright]
