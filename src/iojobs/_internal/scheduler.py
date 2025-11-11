@@ -12,7 +12,8 @@ from typing import (
 )
 from zoneinfo import ZoneInfo
 
-from iojobs._internal._inner_context import ExecutorsPool, JobInnerContext
+from iojobs._internal._inner_scope import ExecutorsPool, JobInnerScope
+from iojobs._internal.datastructures import State
 from iojobs._internal.durable.dummy import DummyRepository
 from iojobs._internal.durable.sqlite import SQLiteJobRepository
 from iojobs._internal.func_wrapper import FuncWrapper, create_default_name
@@ -23,14 +24,15 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
     from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
-    from iojobs._internal._types import Lifespan
+    from iojobs._internal.annotations import AnyDict, Lifespan
     from iojobs._internal.durable.abc import JobRepository
     from iojobs._internal.job_runner import Job
     from iojobs._internal.serializers.abc import JobsSerializer
 
 
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
+_FuncParams = ParamSpec("_FuncParams")
+_ReturnType = TypeVar("_ReturnType")
+_AppType = TypeVar("_AppType", bound="JobScheduler")
 
 
 class JobScheduler:
@@ -40,16 +42,18 @@ class JobScheduler:
         tz: ZoneInfo | None = None,
         loop: asyncio.AbstractEventLoop | None = None,
         durable: JobRepository | Literal[False] | None = None,
-        lifespan: Lifespan | None = None,
+        lifespan: Lifespan[_AppType] | None = None,
         serializer: JobsSerializer | None = None,
         threadpool_executor: ThreadPoolExecutor | None = None,
         processpool_executor: ProcessPoolExecutor | None = None,
+        **extra: AnyDict,
     ) -> None:
+        self.state: State = State()
         if durable is False:
             durable = DummyRepository()
         elif durable is None:
             durable = SQLiteJobRepository()
-        self._inner_ctx: JobInnerContext = JobInnerContext(
+        self._inner_scope: JobInnerScope = JobInnerScope(
             _loop=loop,
             tz=tz or ZoneInfo("UTC"),
             durable=durable,
@@ -59,37 +63,47 @@ class JobScheduler:
             ),
             serializer=serializer or JSONSerializer(),
             asyncio_tasks=set(),
-            extras={},
         )
-        self._lifespan: Lifespan | None = lifespan
+        self._lifespan_context: Lifespan[Any] | None = lifespan  # pyright: ignore[reportExplicitAny]
         self._func_registered: dict[str, FuncWrapper[..., Any]] = {}  # pyright: ignore[reportExplicitAny]
         self._jobs_registered: dict[str, Job[Any]] = {}  # pyright: ignore[reportExplicitAny]
+        self._extra: AnyDict = extra
 
     @overload
-    def register(self, func: Callable[_P, _R]) -> FuncWrapper[_P, _R]: ...
+    def register(
+        self,
+        func: Callable[_FuncParams, _ReturnType],
+    ) -> FuncWrapper[_FuncParams, _ReturnType]: ...
 
     @overload
     def register(
         self,
         *,
         func_name: str | None = None,
-    ) -> Callable[[Callable[_P, _R]], FuncWrapper[_P, _R]]: ...
+    ) -> Callable[
+        [Callable[_FuncParams, _ReturnType]],
+        FuncWrapper[_FuncParams, _ReturnType],
+    ]: ...
 
     @overload
     def register(
         self,
-        func: Callable[_P, _R],
+        func: Callable[_FuncParams, _ReturnType],
         *,
         func_name: str | None = None,
-    ) -> FuncWrapper[_P, _R]: ...
+    ) -> FuncWrapper[_FuncParams, _ReturnType]: ...
 
     def register(
         self,
-        func: Callable[_P, _R] | None = None,
+        func: Callable[_FuncParams, _ReturnType] | None = None,
         *,
         func_name: str | None = None,
     ) -> (
-        FuncWrapper[_P, _R] | Callable[[Callable[_P, _R]], FuncWrapper[_P, _R]]
+        FuncWrapper[_FuncParams, _ReturnType]
+        | Callable[
+            [Callable[_FuncParams, _ReturnType]],
+            FuncWrapper[_FuncParams, _ReturnType],
+        ]
     ):
         wrapper = self._register(func_name=func_name)
         if callable(func):
@@ -100,16 +114,22 @@ class JobScheduler:
         self,
         *,
         func_name: str | None = None,
-    ) -> Callable[[Callable[_P, _R]], FuncWrapper[_P, _R]]:
-        def wrapper(func: Callable[_P, _R]) -> FuncWrapper[_P, _R]:
+    ) -> Callable[
+        [Callable[_FuncParams, _ReturnType]],
+        FuncWrapper[_FuncParams, _ReturnType],
+    ]:
+        def wrapper(
+            func: Callable[_FuncParams, _ReturnType],
+        ) -> FuncWrapper[_FuncParams, _ReturnType]:
             fname = func_name or create_default_name(func)
             if fwrapper := self._func_registered.get(fname):
-                return cast("FuncWrapper[_P, _R]", fwrapper)
+                return cast("FuncWrapper[_FuncParams, _ReturnType]", fwrapper)
             fwrapper = FuncWrapper(
                 func_name=fname,
-                inner_ctx=self._inner_ctx,
+                inner_scope=self._inner_scope,
                 original_func=func,
                 jobs_registered=self._jobs_registered,
+                extra=self._extra,
             )
             _ = functools.update_wrapper(fwrapper, func)
             self._func_registered[fname] = fwrapper
@@ -120,26 +140,32 @@ class JobScheduler:
     @overload
     def register_on_success_hooks(
         self,
-        fwrap: FuncWrapper[_P, _R],
+        fwrap: FuncWrapper[_FuncParams, _ReturnType],
         *,
-        hooks: Iterable[Callable[[_R], None]],
-    ) -> FuncWrapper[_P, _R]: ...
+        hooks: Iterable[Callable[[_ReturnType], None]],
+    ) -> FuncWrapper[_FuncParams, _ReturnType]: ...
 
     @overload
     def register_on_success_hooks(
         self,
         *,
-        hooks: Iterable[Callable[[_R], None]],
-    ) -> Callable[[FuncWrapper[_P, _R]], FuncWrapper[_P, _R]]: ...
+        hooks: Iterable[Callable[[_ReturnType], None]],
+    ) -> Callable[
+        [FuncWrapper[_FuncParams, _ReturnType]],
+        FuncWrapper[_FuncParams, _ReturnType],
+    ]: ...
 
     def register_on_success_hooks(
         self,
-        fwrap: FuncWrapper[_P, _R] | None = None,
+        fwrap: FuncWrapper[_FuncParams, _ReturnType] | None = None,
         *,
-        hooks: Iterable[Callable[[_R], None]],
+        hooks: Iterable[Callable[[_ReturnType], None]],
     ) -> (
-        FuncWrapper[_P, _R]
-        | Callable[[FuncWrapper[_P, _R]], FuncWrapper[_P, _R]]
+        FuncWrapper[_FuncParams, _ReturnType]
+        | Callable[
+            [FuncWrapper[_FuncParams, _ReturnType]],
+            FuncWrapper[_FuncParams, _ReturnType],
+        ]
     ):
         f = self._register_on_success_hooks(hooks)
         if callable(fwrap):
@@ -148,9 +174,14 @@ class JobScheduler:
 
     def _register_on_success_hooks(
         self,
-        callbacks: Iterable[Callable[[_R], None]],
-    ) -> Callable[[FuncWrapper[_P, _R]], FuncWrapper[_P, _R]]:
-        def wrapper(fwrap: FuncWrapper[_P, _R]) -> FuncWrapper[_P, _R]:
+        callbacks: Iterable[Callable[[_ReturnType], None]],
+    ) -> Callable[
+        [FuncWrapper[_FuncParams, _ReturnType]],
+        FuncWrapper[_FuncParams, _ReturnType],
+    ]:
+        def wrapper(
+            fwrap: FuncWrapper[_FuncParams, _ReturnType],
+        ) -> FuncWrapper[_FuncParams, _ReturnType]:
             fwrap._on_success_hooks.extend(callbacks)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
             return fwrap
 
@@ -159,26 +190,32 @@ class JobScheduler:
     @overload
     def register_on_error_hooks(
         self,
-        fwrap: FuncWrapper[_P, _R],
+        fwrap: FuncWrapper[_FuncParams, _ReturnType],
         *,
         hooks: Iterable[Callable[[Exception], None]],
-    ) -> FuncWrapper[_P, _R]: ...
+    ) -> FuncWrapper[_FuncParams, _ReturnType]: ...
 
     @overload
     def register_on_error_hooks(
         self,
         *,
         hooks: Iterable[Callable[[Exception], None]],
-    ) -> Callable[[FuncWrapper[_P, _R]], FuncWrapper[_P, _R]]: ...
+    ) -> Callable[
+        [FuncWrapper[_FuncParams, _ReturnType]],
+        FuncWrapper[_FuncParams, _ReturnType],
+    ]: ...
 
     def register_on_error_hooks(
         self,
-        fwrap: FuncWrapper[_P, _R] | None = None,
+        fwrap: FuncWrapper[_FuncParams, _ReturnType] | None = None,
         *,
         hooks: Iterable[Callable[[Exception], None]],
     ) -> (
-        FuncWrapper[_P, _R]
-        | Callable[[FuncWrapper[_P, _R]], FuncWrapper[_P, _R]]
+        FuncWrapper[_FuncParams, _ReturnType]
+        | Callable[
+            [FuncWrapper[_FuncParams, _ReturnType]],
+            FuncWrapper[_FuncParams, _ReturnType],
+        ]
     ):
         f = self._register_on_error_hooks(hooks)
         if callable(fwrap):
@@ -188,8 +225,13 @@ class JobScheduler:
     def _register_on_error_hooks(
         self,
         callbacks: Iterable[Callable[[Exception], None]],
-    ) -> Callable[[FuncWrapper[_P, _R]], FuncWrapper[_P, _R]]:
-        def wrapper(fwrap: FuncWrapper[_P, _R]) -> FuncWrapper[_P, _R]:
+    ) -> Callable[
+        [FuncWrapper[_FuncParams, _ReturnType]],
+        FuncWrapper[_FuncParams, _ReturnType],
+    ]:
+        def wrapper(
+            fwrap: FuncWrapper[_FuncParams, _ReturnType],
+        ) -> FuncWrapper[_FuncParams, _ReturnType]:
             fwrap._on_error_hooks.extend(callbacks)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
             return fwrap
 
@@ -199,4 +241,4 @@ class JobScheduler:
         pass
 
     def shutdown(self) -> None:
-        self._inner_ctx.close()
+        self._inner_scope.close()
