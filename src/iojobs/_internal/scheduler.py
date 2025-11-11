@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+from contextlib import asynccontextmanager
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -21,8 +22,9 @@ from iojobs._internal.serializers.json import JSONSerializer
 
 if TYPE_CHECKING:
     import asyncio
-    from collections.abc import Callable, Iterable
+    from collections.abc import AsyncIterator, Callable, Iterable
     from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+    from types import TracebackType
 
     from iojobs._internal.annotations import AnyDict, Lifespan
     from iojobs._internal.durable.abc import JobRepository
@@ -33,6 +35,11 @@ if TYPE_CHECKING:
 _FuncParams = ParamSpec("_FuncParams")
 _ReturnType = TypeVar("_ReturnType")
 _AppType = TypeVar("_AppType", bound="JobScheduler")
+
+
+@asynccontextmanager
+async def default_lifespan(_: object) -> AsyncIterator[None]:
+    yield None
 
 
 class JobScheduler:
@@ -64,7 +71,9 @@ class JobScheduler:
             serializer=serializer or JSONSerializer(),
             asyncio_tasks=set(),
         )
-        self._lifespan_context: Lifespan[Any] | None = lifespan  # pyright: ignore[reportExplicitAny]
+        self._lifespan: AsyncIterator[None] = self._lifespan_wrapper(
+            lifespan or default_lifespan,
+        )
         self._func_registered: dict[str, FuncWrapper[..., Any]] = {}  # pyright: ignore[reportExplicitAny]
         self._jobs_registered: dict[str, Job[Any]] = {}  # pyright: ignore[reportExplicitAny]
         self._extra: AnyDict = extra
@@ -237,8 +246,30 @@ class JobScheduler:
 
         return wrapper
 
-    def startup(self) -> None:
-        pass
+    async def _lifespan_wrapper(
+        self,
+        user_lifespan: Lifespan[Any],  # pyright: ignore[reportExplicitAny]
+    ) -> AsyncIterator[None]:
+        async with user_lifespan(self) as maybe_state:
+            if maybe_state is not None:
+                self.state.update(maybe_state)
+            yield None
 
-    def shutdown(self) -> None:
+    async def __aenter__(self) -> JobScheduler:
+        await self.startup()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None = None,
+        exc_val: BaseException | None = None,
+        exc_tb: TracebackType | None = None,
+    ) -> None:
+        await self.shutdown()
+
+    async def startup(self) -> None:
+        await anext(self._lifespan)
+
+    async def shutdown(self) -> None:
         self._inner_scope.close()
+        await anext(self._lifespan, None)

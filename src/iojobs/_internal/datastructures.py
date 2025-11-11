@@ -1,8 +1,9 @@
 # pyright: reportExplicitAny=false
+from collections.abc import Mapping
 from typing import Any
 
 
-class EmptyPlaceholder:  # pragma: no cover
+class EmptyPlaceholder:
     def __repr__(self) -> str:
         return "EMPTY"
 
@@ -44,3 +45,6 @@ class State:
 
     def __delattr__(self, key: Any) -> None:  # noqa: ANN401
         del self._state[key]
+
+    def update(self, state: Mapping[str, Any]) -> None:
+        self._state.update(state)
