@@ -1,6 +1,4 @@
 # pyright: reportPrivateUsage=false
-from unittest import mock
-
 import pytest
 
 from iojobs import JobScheduler
@@ -59,7 +57,7 @@ async def test_job_runner_hooks(scheduler: JobScheduler) -> None:
     assert isinstance(expected_on_error, ZeroDivisionError)
 
 
-async def test_job_runner_hooks_wrong_usage(scheduler: JobScheduler) -> None:
+async def test_job_runner_hooks_fail_usage(scheduler: JobScheduler) -> None:
     def on_success(_num: int) -> None:
         raise ValueError
 
@@ -78,9 +76,9 @@ async def test_job_runner_hooks_wrong_usage(scheduler: JobScheduler) -> None:
 
     job1 = await t.schedule(1).delay(0)
     job2 = await t.schedule(0).delay(0)
-    with mock.patch("traceback.print_exc") as mock_print_exc:
-        await job1.wait()
-        await job2.wait()
 
-    total_calls = 3
-    mock_print_exc.assert_has_calls([mock.call() for _ in range(total_calls)])
+    await job1.wait()
+    await job2.wait()
+
+    assert job1.status is JobStatus.SUCCESS
+    assert job2.status is JobStatus.FAILED

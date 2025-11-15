@@ -8,6 +8,7 @@ form the basis of the iojobs asynchronous job scheduling system.
 from importlib.metadata import version as get_version
 
 from iojobs._internal.constants import ExecutionMode, JobStatus
+from iojobs._internal.datastructures import State
 from iojobs._internal.runner.job import Job
 from iojobs._internal.runner.runner import JobRunner
 from iojobs._internal.scheduler import JobScheduler
@@ -19,4 +20,5 @@ __all__ = (
     "JobRunner",
     "JobScheduler",
     "JobStatus",
+    "State",
 )

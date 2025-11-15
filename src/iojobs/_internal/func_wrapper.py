@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 
     from iojobs._internal._inner_scope import JobInnerScope
     from iojobs._internal.annotations import AnyDict
+    from iojobs._internal.datastructures import State
+    from iojobs._internal.middleware.resolver import MiddlewareResolver
     from iojobs._internal.runner.job import Job
 
 
@@ -33,21 +35,25 @@ def create_default_name(func: Callable[_FuncParams, _ReturnType], /) -> str:
 
 
 class FuncWrapper(Generic[_FuncParams, _ReturnType]):
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
+        state: State,
         job_name: str,
         inner_scope: JobInnerScope,
         original_func: Callable[_FuncParams, _ReturnType],
         jobs_registered: dict[str, Job[_ReturnType]],
+        middleware: MiddlewareResolver,
         extra: AnyDict,
     ) -> None:
+        self._state: State = state
         self._job_name: str = job_name
         self._inner_scope: JobInnerScope = inner_scope
         self._jobs_registered: dict[str, Job[_ReturnType]] = jobs_registered
         self._on_success_hooks: list[Callable[[_ReturnType], None]] = []
         self._on_error_hooks: list[Callable[[Exception], None]] = []
         self._original_func: Callable[_FuncParams, _ReturnType] = original_func
+        self._middleware: MiddlewareResolver = middleware
         self._extra: AnyDict = extra
 
         # --------------------------------------------------------------------
@@ -126,10 +132,12 @@ class FuncWrapper(Generic[_FuncParams, _ReturnType]):
         fn = self._original_func
         callback = Callback(self._job_name, fn, *args, **kwargs)
         return JobRunner(
+            state=self._state,
             callback=callback,
             inner_scope=self._inner_scope,
             jobs_registered=self._jobs_registered,
             on_success_hooks=self._on_success_hooks,
             on_error_hooks=self._on_error_hooks,
+            middleware=self._middleware,
             extra=self._extra,
         )

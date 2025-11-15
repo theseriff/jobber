@@ -5,7 +5,7 @@ import asyncio
 import warnings
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from iojobs._internal.constants import EMPTY, FAILED, JobStatus
+from iojobs._internal.constants import EMPTY, JobStatus
 from iojobs._internal.exceptions import (
     JobFailedError,
     JobNotCompletedError,
@@ -69,14 +69,14 @@ class Job(Generic[_ReturnType]):
         )
 
     def result(self) -> _ReturnType:
-        if self._result is FAILED:
+        if self.status is JobStatus.SUCCESS or self._result is not EMPTY:
+            return self._result
+        if self.status is JobStatus.FAILED:
             raise JobFailedError(
                 self.id,
                 reason=str(self._exception),
             ) from self._exception
-        if self._result is EMPTY:
-            raise JobNotCompletedError
-        return self._result
+        raise JobNotCompletedError
 
     def set_result(self, val: _ReturnType) -> None:
         self._result = val

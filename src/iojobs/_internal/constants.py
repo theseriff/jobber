@@ -16,11 +16,10 @@ class ExecutionMode(str, Enum):
 class JobStatus(str, Enum):
     SCHEDULED = "scheduled"
     RUNNING = "running"
-    ABORTED = "aborted"
+    SKIPPED = "skipped"
     CANCELED = "canceled"
     SUCCESS = "success"
     FAILED = "failed"
 
 
 EMPTY: Any = EmptyPlaceholder()
-FAILED: Any = EmptyPlaceholder()

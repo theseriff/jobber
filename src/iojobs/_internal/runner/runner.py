@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import traceback
 import warnings
 from abc import ABC
@@ -11,9 +12,11 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Final, Generic, ParamSpec, TypeVar, cast
 from uuid import uuid4
 
-from iojobs._internal.constants import EMPTY, FAILED, ExecutionMode, JobStatus
+from iojobs._internal.constants import EMPTY, ExecutionMode, JobStatus
 from iojobs._internal.cron_parser import CronParser
+from iojobs._internal.datastructures import State
 from iojobs._internal.exceptions import (
+    CallbackSkippedError,
     NegativeDelayError,
 )
 from iojobs._internal.runner.command import (
@@ -29,8 +32,11 @@ if TYPE_CHECKING:
     from iojobs._internal._inner_scope import JobInnerScope
     from iojobs._internal.annotations import AnyDict
     from iojobs._internal.func_original import Callback
+    from iojobs._internal.middleware.resolver import MiddlewareResolver
     from iojobs._internal.runner.command import Runner
 
+
+logger = logging.getLogger("iojobs.runner")
 
 ASYNC_FUNC_IGNORED_WARNING = """\
 Method {fname!r} is ignored for async functions. \
@@ -56,20 +62,25 @@ class JobRunner(ABC, Generic[_FuncParams, _ReturnType]):
         "_extra",
         "_inner_scope",
         "_jobs_registered",
+        "_middleware",
         "_on_error_hooks",
         "_on_success_hooks",
+        "_state",
     )
 
     def __init__(  # noqa: PLR0913
         self,
         *,
+        state: State,
         callback: Callback[_FuncParams, _ReturnType],
         inner_scope: JobInnerScope,
         jobs_registered: dict[str, Job[_ReturnType]],
         on_success_hooks: list[Callable[[_ReturnType], None]],
         on_error_hooks: list[Callable[[Exception], None]],
+        middleware: MiddlewareResolver,
         extra: AnyDict,
     ) -> None:
+        self._state: State = state
         self._callback: Callback[_FuncParams, _ReturnType] = callback
         self._inner_scope: JobInnerScope = inner_scope
         self._on_success_hooks: list[Callable[[_ReturnType], None]] = (
@@ -80,6 +91,7 @@ class JobRunner(ABC, Generic[_FuncParams, _ReturnType]):
         )
         self._jobs_registered: Final = jobs_registered
         self._cron_parser: CronParser = EMPTY
+        self._middleware: MiddlewareResolver = middleware
         self._extra: AnyDict = extra
 
     async def cron(
@@ -213,23 +225,25 @@ class JobRunner(ABC, Generic[_FuncParams, _ReturnType]):
         self._inner_scope.asyncio_tasks.add(task)
         task.add_done_callback(self._inner_scope.asyncio_tasks.discard)
 
-    async def _runner(self, *, ctx: RunnerContext[_ReturnType]) -> _ReturnType:
+    async def _runner(self, *, ctx: RunnerContext[_ReturnType]) -> None:
         job = ctx.job
+        job.status = JobStatus.RUNNING
+        self._state.request = State()
+        chain = self._middleware.chain(ctx.cmd.run, raise_if_skipped=True)
         try:
-            job.status = JobStatus.RUNNING
-            result = await ctx.cmd.run()
+            result = await chain(job, self._state)
+        except CallbackSkippedError:
+            logger.debug("Job %s callback was skipped by middleware", job.id)
+            job.status = JobStatus.SKIPPED
         except Exception as exc:
-            traceback.print_exc()
+            logger.exception("Job %s failed with unexpected error", job.id)
             job.status = JobStatus.FAILED
-            job.set_result(FAILED)
             job.set_exception(exc)
             self._run_hooks_error(exc)
-            raise
         else:
             job.set_result(result)
             job.status = JobStatus.SUCCESS
             self._run_hooks_success(result)
-            return result
         finally:
             event = job._event
             if ctx.cron_parser:
