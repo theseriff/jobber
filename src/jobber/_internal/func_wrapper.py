@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
     from types import CoroutineType
 
-    from jobber._internal.common.annotations import AnyDict
     from jobber._internal.common.datastructures import State
     from jobber._internal.context import JobberContext
     from jobber._internal.middleware.pipeline import MiddlewarePipeline
@@ -44,7 +43,6 @@ class FuncWrapper(Generic[_FuncParams, _ReturnType]):
         original_func: Callable[_FuncParams, _ReturnType],
         job_registry: dict[str, Job[_ReturnType]],
         middleware: MiddlewarePipeline,
-        extra: AnyDict,
     ) -> None:
         self._state: State = state
         self._job_name: str = job_name
@@ -54,7 +52,6 @@ class FuncWrapper(Generic[_FuncParams, _ReturnType]):
         self._on_error_hooks: list[Callable[[Exception], None]] = []
         self._original_func: Callable[_FuncParams, _ReturnType] = original_func
         self._middleware: MiddlewarePipeline = middleware
-        self._extra: AnyDict = extra
 
         # --------------------------------------------------------------------
         # HACK: ProcessPoolExecutor / Multiprocessing
@@ -139,5 +136,4 @@ class FuncWrapper(Generic[_FuncParams, _ReturnType]):
             on_success_hooks=self._on_success_hooks,
             on_error_hooks=self._on_error_hooks,
             middleware=self._middleware,
-            extra=self._extra,
         )

@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
     from types import TracebackType
 
-    from jobber._internal.common.annotations import AnyDict, Lifespan
+    from jobber._internal.common.annotations import Lifespan
     from jobber._internal.durable.abc import JobRepository
     from jobber._internal.middleware.base import BaseMiddleware
     from jobber._internal.runner.job import Job
@@ -56,9 +56,8 @@ class Jobber:
         middleware: Sequence[BaseMiddleware] | None = None,
         threadpool_executor: ThreadPoolExecutor | None = None,
         processpool_executor: ProcessPoolExecutor | None = None,
-        **extra: AnyDict,
     ) -> None:
-        self.state: State = State({"app": self})
+        self.state: State = State()
         self.middleware: MiddlewarePipeline = MiddlewarePipeline(middleware)
         if durable is False:
             durable = DummyRepository()
@@ -80,7 +79,6 @@ class Jobber:
         )
         self._function_registry: dict[str, FuncWrapper[..., Any]] = {}  # pyright: ignore[reportExplicitAny]
         self._job_registry: dict[str, Job[Any]] = {}  # pyright: ignore[reportExplicitAny]
-        self._extra: AnyDict = extra
 
     @overload
     def register(
@@ -144,7 +142,6 @@ class Jobber:
                 original_func=func,
                 job_registry=self._job_registry,
                 middleware=self.middleware,
-                extra=self._extra,
             )
             _ = functools.update_wrapper(fwrapper, func)
             self._function_registry[fname] = fwrapper

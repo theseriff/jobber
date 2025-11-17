@@ -8,9 +8,8 @@ from jobber._internal.exceptions import HandlerSkippedError
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
 
-    from jobber._internal.common.datastructures import State
+    from jobber._internal.context import Context
     from jobber._internal.middleware.base import BaseMiddleware, CallNext
-    from jobber._internal.runner.job import Job
 
 _ReturnT = TypeVar("_ReturnT")
 
@@ -30,11 +29,11 @@ class MiddlewarePipeline:
         self,
         callback: Callable[..., Awaitable[_ReturnT]],
         *,
-        raise_if_skipped: bool = False,
+        raise_if_skipped: bool = True,
     ) -> CallNext[_ReturnT]:
         has_called = False
 
-        def target(_job: Job[_ReturnT], _state: State) -> Awaitable[_ReturnT]:
+        def target(_context: Context) -> Awaitable[_ReturnT]:
             nonlocal has_called
             has_called = True
             return callback()
@@ -43,8 +42,8 @@ class MiddlewarePipeline:
         for m in reversed(self._middlewares):
             chain_of_middlewares = functools.partial(m, chain_of_middlewares)
 
-        async def executor(_job: Job[_ReturnT], state: State) -> _ReturnT:
-            result = await chain_of_middlewares(_job, state)
+        async def executor(context: Context) -> _ReturnT:
+            result = await chain_of_middlewares(context)
             if raise_if_skipped is True and has_called is False:
                 raise HandlerSkippedError
             return result

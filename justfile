@@ -4,6 +4,8 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 # Use sh on Unix-like systems
 set shell := ["sh", "-c"]
 
+export VIRTUAL_ENV := ".venv"
+
 [private]
 default:
   @just --list --unsorted --list-heading $'commands…\n'

@@ -9,12 +9,14 @@ from importlib.metadata import version as get_version
 
 from jobber._internal.common.constants import ExecutionMode, JobStatus
 from jobber._internal.common.datastructures import State
+from jobber._internal.context import Context
 from jobber._internal.jobber import Jobber
 from jobber._internal.runner.job import Job
 from jobber._internal.runner.scheduler import JobScheduler
 
 __version__ = get_version("jobber")
 __all__ = (
+    "Context",
     "ExecutionMode",
     "Job",
     "JobScheduler",

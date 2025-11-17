@@ -3,7 +3,15 @@ from __future__ import annotations
 import asyncio
 import warnings
 from abc import ABCMeta, abstractmethod
-from typing import TYPE_CHECKING, Protocol, TypeVar, cast, final
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Protocol,
+    TypeVar,
+    final,
+    overload,
+    runtime_checkable,
+)
 
 from jobber._internal.common.constants import ExecutionMode
 
@@ -18,6 +26,7 @@ _ReturnType = TypeVar("_ReturnType")
 _Return_co = TypeVar("_Return_co", covariant=True)
 
 
+@runtime_checkable
 class Executor(Protocol[_Return_co], metaclass=ABCMeta):
     @abstractmethod
     async def run(self) -> _Return_co:
@@ -74,14 +83,29 @@ Async functions are already executed in the event loop.
 """
 
 
+@overload
+def create_executor(
+    handler: Handler[..., Awaitable[_ReturnType]],
+    exec_mode: ExecutionMode,
+    jobber_ctx: JobberContext,
+) -> Executor[_ReturnType]: ...
+
+
+@overload
 def create_executor(
     handler: Handler[..., _ReturnType],
     exec_mode: ExecutionMode,
     jobber_ctx: JobberContext,
+) -> Executor[_ReturnType]: ...
+
+
+def create_executor(
+    handler: Handler[..., Any],  # pyright: ignore[reportExplicitAny]
+    exec_mode: ExecutionMode,
+    jobber_ctx: JobberContext,
 ) -> Executor[_ReturnType]:
     if asyncio.iscoroutinefunction(handler.original_func):
-        c = cast("Handler[..., Awaitable[_ReturnType]]", handler)
-        executor = AsyncExecutor(c)
+        executor = AsyncExecutor(handler)
         if exec_mode is ExecutionMode.MAIN:
             return executor
         if exec_mode is ExecutionMode.PROCESS:

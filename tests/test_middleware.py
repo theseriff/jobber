@@ -2,8 +2,7 @@
 # pyright: reportExplicitAny=false
 from typing import Any
 
-from jobber import Job, JobStatus, State
-from jobber._internal.jobber import Jobber
+from jobber import Context, Jobber, JobStatus
 from jobber.middleware import BaseMiddleware, CallNext
 
 
@@ -14,12 +13,11 @@ class MyMiddleware(BaseMiddleware):
     async def __call__(
         self,
         call_next: CallNext[Any],
-        job: Job[Any],
-        state: State,
+        context: Context,
     ) -> Any:
         if self.skip is True:
             return None
-        return await call_next(job, state)
+        return await call_next(context)
 
 
 async def test_middleware(jobber: Jobber) -> None:

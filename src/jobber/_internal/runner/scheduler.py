@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import traceback
 from abc import ABC
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -14,6 +13,7 @@ from uuid import uuid4
 from jobber._internal.common.constants import EMPTY, ExecutionMode, JobStatus
 from jobber._internal.common.cron_parser import CronParser
 from jobber._internal.common.datastructures import State
+from jobber._internal.context import Context
 from jobber._internal.exceptions import HandlerSkippedError, NegativeDelayError
 from jobber._internal.runner.executor import Executor, create_executor
 from jobber._internal.runner.job import Job
@@ -21,7 +21,6 @@ from jobber._internal.runner.job import Job
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from jobber._internal.common.annotations import AnyDict
     from jobber._internal.context import JobberContext
     from jobber._internal.handler import Handler
     from jobber._internal.middleware.pipeline import MiddlewarePipeline
@@ -44,7 +43,6 @@ class ExecutionContext(Generic[_ReturnType]):
 class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
     __slots__: tuple[str, ...] = (
         "_cron_parser",
-        "_extra",
         "_handler",
         "_job_registry",
         "_jobber_ctx",
@@ -64,7 +62,6 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
         on_success_hooks: list[Callable[[_ReturnType], None]],
         on_error_hooks: list[Callable[[Exception], None]],
         middleware: MiddlewarePipeline,
-        extra: AnyDict,
     ) -> None:
         self._state: State = state
         self._handler: Handler[_FuncParams, _ReturnType] = handler
@@ -78,7 +75,6 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
         self._job_registry: Final = job_registry
         self._cron_parser: CronParser = EMPTY
         self._middleware: MiddlewarePipeline = middleware
-        self._extra: AnyDict = extra
 
     async def cron(
         self,
@@ -187,13 +183,10 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
     async def _exec_job(self, *, ctx: ExecutionContext[_ReturnType]) -> None:
         job = ctx.job
         job.status = JobStatus.RUNNING
-        self._state.request = State()
-        middleware_chain = self._middleware.compose(
-            ctx.executor.run,
-            raise_if_skipped=True,
-        )
+        job_context = Context(job=job, state=self._state, request=State())
+        middleware_chain = self._middleware.compose(ctx.executor.run)
         try:
-            result = await middleware_chain(job, self._state)
+            result = await middleware_chain(job_context)
         except HandlerSkippedError:
             logger.debug("Job %s execution was skipped by middleware", job.id)
             job.status = JobStatus.SKIPPED
@@ -236,12 +229,12 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
         for call_success in self._on_success_hooks:
             try:
                 call_success(result)
-            except Exception:  # noqa: BLE001, PERF203
-                traceback.print_exc()
+            except Exception:  # noqa: PERF203
+                logger.exception("Error executing success hook")
 
     def _run_hooks_error(self, exc: Exception) -> None:
         for call_error in self._on_error_hooks:
             try:
                 call_error(exc)
-            except Exception:  # noqa: BLE001, PERF203
-                traceback.print_exc()
+            except Exception:  # noqa: PERF203
+                logger.exception("Error executing error hook")

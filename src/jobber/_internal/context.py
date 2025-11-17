@@ -1,3 +1,4 @@
+# pyright: reportExplicitAny=false
 from __future__ import annotations
 
 import asyncio
@@ -9,7 +10,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from zoneinfo import ZoneInfo
 
+    from jobber._internal.common.datastructures import State
     from jobber._internal.durable.abc import JobRepository
+    from jobber._internal.runner.job import Job
     from jobber._internal.serializers.abc import JobsSerializer
 
 
@@ -39,13 +42,20 @@ class ExecutorsPool:
 
 
 @dataclass(slots=True, kw_only=True)
+class Context:
+    job: Job[Any]
+    state: State
+    request: State
+
+
+@dataclass(slots=True, kw_only=True)
 class JobberContext:
     _loop: asyncio.AbstractEventLoop | None
     tz: ZoneInfo
     durable: JobRepository
     executors: ExecutorsPool
     serializer: JobsSerializer
-    asyncio_tasks: set[asyncio.Task[Any]]  # pyright: ignore[reportExplicitAny]
+    asyncio_tasks: set[asyncio.Task[Any]]
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:

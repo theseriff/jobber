@@ -1,10 +1,9 @@
+# ruff: noqa: ANN401
 # pyright: reportExplicitAny=false
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
+from collections import UserDict
+from typing import Any
 
 
 class EmptyPlaceholder:
@@ -21,38 +20,29 @@ class EmptyPlaceholder:
         return False
 
 
-class State:
-    """An object that can be used to store arbitrary state.
+class State(UserDict[str, Any]):
+    """An object that can be used to store arbitrary state."""
 
-    Used for `request.state` and `app.state`.
-    """
+    data: dict[str, Any]
+    __slots__: tuple[str, ...] = ("data",)
 
-    __slots__: tuple[str, ...] = ("_state",)
+    def __init__(self, state: dict[str, Any] | None = None) -> None:  # pyright: ignore[reportMissingSuperCall]
+        object.__setattr__(self, "data", state or {})
 
-    _state: dict[str, Any]  # pyright: ignore[reportUninitializedInstanceVariable]
+    def __setattr__(self, key: str, value: Any) -> None:
+        self[key] = value
 
-    def __init__(self, state: dict[str, Any] | None = None) -> None:
-        if state is None:
-            state = {}
-        super().__setattr__("_state", state)
-
-    def __setattr__(self, key: Any, value: Any) -> None:  # noqa: ANN401
-        self._state[key] = value
-
-    def __getattr__(self, key: Any) -> Any:  # noqa: ANN401
+    def __getattr__(self, key: str) -> Any:
         try:
-            return self._state[key]
+            return self.data[key]
         except KeyError as exc:
             message = (
                 f"{self.__class__.__name__!r} object has no attribute {key!r}"
             )
             raise AttributeError(message) from exc
 
-    def __delattr__(self, key: Any) -> None:  # noqa: ANN401
-        del self._state[key]
+    def __delattr__(self, key: str) -> None:
+        del self[key]
 
     def __str__(self) -> str:
-        return str(self._state)
-
-    def update(self, state: Mapping[str, Any]) -> None:
-        self._state.update(state)
+        return f"State({super().__str__()})"

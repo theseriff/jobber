@@ -18,7 +18,7 @@ async def test_state() -> None:
     state = State(state={"client": client})
     state.new_client = AsyncMock()
     await state.client.post(url="https://")
-    assert hasattr(state, "_state")
+    assert hasattr(state, "data")
     assert hasattr(state, "client")
     assert hasattr(state, "new_client")
     state.client.post.assert_awaited_once_with(url="https://")

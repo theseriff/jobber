@@ -14,5 +14,3 @@ StatefulLifespan: TypeAlias = Callable[
     AbstractAsyncContextManager[Mapping[str, Any]],
 ]
 Lifespan: TypeAlias = StatelessLifespan[AppType] | StatefulLifespan[AppType]
-
-AnyDict: TypeAlias = dict[str, Any]
