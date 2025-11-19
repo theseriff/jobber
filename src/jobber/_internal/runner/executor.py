@@ -3,7 +3,7 @@ import functools
 from typing import Generic, TypeVar, cast, final
 
 from jobber._internal.common.constants import ExecutionMode
-from jobber._internal.context import JobberContext
+from jobber._internal.context import AppContext
 
 _ReturnType = TypeVar("_ReturnType")
 
@@ -11,9 +11,9 @@ _ReturnType = TypeVar("_ReturnType")
 @final
 class Executor(Generic[_ReturnType]):
     __slots__: tuple[str, ...] = (
+        "app_ctx",
         "execution_mode",
         "func_injected",
-        "jobber_ctx",
     )
 
     def __init__(
@@ -21,9 +21,9 @@ class Executor(Generic[_ReturnType]):
         *,
         execution_mode: ExecutionMode,
         func_injected: functools.partial[_ReturnType],
-        jobber_ctx: JobberContext,
+        app_ctx: AppContext,
     ) -> None:
-        self.jobber_ctx = jobber_ctx
+        self.app_ctx = app_ctx
         self.func_injected = func_injected
         self.execution_mode = execution_mode
 
@@ -33,13 +33,13 @@ class Executor(Generic[_ReturnType]):
             return cast("_ReturnType", await handler())
         match self.execution_mode:
             case ExecutionMode.THREAD:
-                return await self.jobber_ctx.loop.run_in_executor(
-                    self.jobber_ctx.executors.threadpool,
+                return await self.app_ctx.loop.run_in_executor(
+                    self.app_ctx.executors.threadpool,
                     handler,
                 )
             case ExecutionMode.PROCESS:
-                return await self.jobber_ctx.loop.run_in_executor(
-                    self.jobber_ctx.executors.processpool,
+                return await self.app_ctx.loop.run_in_executor(
+                    self.app_ctx.executors.processpool,
                     handler,
                 )
             case _:

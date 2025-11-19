@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from types import CoroutineType
 
     from jobber._internal.common.datastructures import State
-    from jobber._internal.context import JobberContext
+    from jobber._internal.context import AppContext
     from jobber._internal.middleware.pipeline import MiddlewarePipeline
     from jobber._internal.runner.job import Job
 
@@ -39,14 +39,14 @@ class FuncWrapper(Generic[_FuncParams, _ReturnType]):
         *,
         state: State,
         job_name: str,
-        job_context: JobberContext,
+        app_context: AppContext,
         original_func: Callable[_FuncParams, _ReturnType],
         job_registry: dict[str, Job[_ReturnType]],
         middleware: MiddlewarePipeline,
     ) -> None:
         self._state: State = state
         self._job_name: str = job_name
-        self._jobber_ctx: JobberContext = job_context
+        self._app_ctx: AppContext = app_context
         self._job_registry: dict[str, Job[_ReturnType]] = job_registry
         self._on_success_hooks: list[Callable[[_ReturnType], None]] = []
         self._on_error_hooks: list[Callable[[Exception], None]] = []
@@ -131,7 +131,7 @@ class FuncWrapper(Generic[_FuncParams, _ReturnType]):
             func_injected=func_injected,
             job_name=self._job_name,
             job_registry=self._job_registry,
-            jobber_ctx=self._jobber_ctx,
+            app_ctx=self._app_ctx,
             middleware=self._middleware,
             on_error_hooks=self._on_error_hooks,
             on_success_hooks=self._on_success_hooks,

@@ -79,5 +79,5 @@ async def test_jobber(  # noqa: PLR0913
 
     assert job_sync.result() == expected
     assert job_async.result() == expected
-    assert jobber._jobber_ctx.asyncio_tasks == set()
+    assert jobber._app_ctx.asyncio_tasks == set()
     assert jobber._job_registry == {}

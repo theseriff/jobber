@@ -14,7 +14,7 @@ from typing import (
 from zoneinfo import ZoneInfo
 
 from jobber._internal.common.datastructures import State
-from jobber._internal.context import ExecutorsPool, JobberContext
+from jobber._internal.context import AppContext, ExecutorsPool
 from jobber._internal.durable.dummy import DummyRepository
 from jobber._internal.durable.sqlite import SQLiteJobRepository
 from jobber._internal.func_wrapper import FuncWrapper, create_default_name
@@ -63,7 +63,7 @@ class Jobber:
             durable = DummyRepository()
         elif durable is None:
             durable = SQLiteJobRepository()
-        self._jobber_ctx: JobberContext = JobberContext(
+        self._app_ctx: AppContext = AppContext(
             _loop=loop,
             tz=tz or ZoneInfo("UTC"),
             durable=durable,
@@ -138,7 +138,7 @@ class Jobber:
             fwrapper = FuncWrapper(
                 state=self.state,
                 job_name=fname,
-                job_context=self._jobber_ctx,
+                app_context=self._app_ctx,
                 original_func=func,
                 job_registry=self._job_registry,
                 middleware=self.middleware,
@@ -274,5 +274,5 @@ class Jobber:
         await anext(self._lifespan)
 
     async def shutdown(self) -> None:
-        self._jobber_ctx.close()
+        self._app_ctx.close()
         await anext(self._lifespan, None)

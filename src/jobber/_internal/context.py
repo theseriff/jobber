@@ -42,14 +42,14 @@ class ExecutorsPool:
 
 
 @dataclass(slots=True, kw_only=True)
-class Context:
+class JobContext:
     job: Job[Any]
     state: State
     request: State
 
 
 @dataclass(slots=True, kw_only=True)
-class JobberContext:
+class AppContext:
     _loop: asyncio.AbstractEventLoop | None
     tz: ZoneInfo
     durable: JobRepository

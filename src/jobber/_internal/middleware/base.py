@@ -10,10 +10,10 @@ from typing import (
     runtime_checkable,
 )
 
-from jobber._internal.context import Context
+from jobber._internal.context import JobContext
 
 _ReturnType = TypeVar("_ReturnType")
-CallNext = Callable[[Context], Awaitable[_ReturnType]]
+CallNext = Callable[[JobContext], Awaitable[_ReturnType]]
 
 
 @runtime_checkable
@@ -22,5 +22,5 @@ class BaseMiddleware(Protocol, metaclass=ABCMeta):
     async def __call__(
         self,
         call_next: CallNext[Any],
-        context: Context,
+        context: JobContext,
     ) -> Any: ...  # noqa: ANN401
