@@ -10,11 +10,7 @@ class MyMiddleware(BaseMiddleware):
     def __init__(self, *, skip: bool = False) -> None:
         self.skip: bool = skip
 
-    async def __call__(
-        self,
-        call_next: CallNext[Any],
-        context: JobContext,
-    ) -> Any:
+    async def __call__(self, call_next: CallNext, context: JobContext) -> Any:
         if self.skip is True:
             return None
         return await call_next(context)

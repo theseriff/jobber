@@ -11,11 +11,7 @@ from jobber.middleware import BaseMiddleware, CallNext
 
 
 class _MyMiddleware(BaseMiddleware):
-    async def __call__(
-        self,
-        call_next: CallNext[Any],
-        context: JobContext,
-    ) -> Any:  # noqa: ANN401
+    async def __call__(self, call_next: CallNext, context: JobContext) -> Any:  # noqa: ANN401
         context.request_state.test = 1
         return await call_next(context)
 

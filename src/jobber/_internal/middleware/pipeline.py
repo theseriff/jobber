@@ -30,7 +30,7 @@ class MiddlewarePipeline:
         callback: Callable[..., Awaitable[_ReturnT]],
         *,
         raise_if_skipped: bool = True,
-    ) -> CallNext[_ReturnT]:
+    ) -> CallNext:
         has_called = False
 
         async def target(context: JobContext) -> _ReturnT:
