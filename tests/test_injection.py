@@ -1,9 +1,7 @@
-# pyright: reportExplicitAny=false
+# pyright: reportExplicitAny=false, reportPrivateUsage=false
 import functools
 from typing import Any
 from unittest.mock import Mock
-
-import pytest
 
 from jobber import INJECT, Job, Jobber, JobContext, State
 from jobber._internal.common.constants import EMPTY
@@ -55,17 +53,31 @@ async def test_injection(jobber: Jobber) -> None:
     assert request_test_num == 1
 
 
-async def test_injection_wrong_usage() -> None:
+async def test_injection_wrong_usage(jobber: Jobber) -> None:
+    @jobber.register
     async def untyped_func(_job=INJECT) -> None:  # type: ignore[no-untyped-def] # pyright: ignore[reportMissingParameterType]  # noqa: ANN001
         pass
 
+    @jobber.register
     async def not_exists_type_in_map(_job: Jobber = INJECT) -> None:
         pass
 
-    partial = functools.partial(untyped_func)
-    with pytest.raises(ValueError, match="Parameter _job requires"):
-        inject_context(partial, Mock())
+    job1 = await untyped_func.schedule().delay(0)
+    job2 = await not_exists_type_in_map.schedule().delay(0)
+    await job1.wait()
+    await job2.wait()
 
-    partial = functools.partial(not_exists_type_in_map)
-    with pytest.raises(ValueError, match="Unknown type for injection"):
-        inject_context(partial, Mock())
+    assert "Parameter _job requires" in str(job1._exception)
+    assert "Unknown type for injection" in str(job2._exception)
+
+
+async def test_inject_context_skips_non_inject_parameters() -> None:
+    def func_without_inject(normal_param: str) -> str:
+        return normal_param
+
+    partial_func = functools.partial(func_without_inject, normal_param="test")
+    mock_context = Mock(spec=JobContext)
+    inject_context(partial_func, mock_context)
+    res = partial_func()
+
+    assert partial_func.keywords.get("normal_param") == "test" == res

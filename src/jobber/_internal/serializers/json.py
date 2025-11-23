@@ -1,6 +1,6 @@
 import base64
 import json
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, cast
 
 from jobber._internal.serializers.abc import JobsSerializer, SerializableTypes
 
@@ -49,8 +49,5 @@ class JSONSerializer(JobsSerializer):
         return json.dumps(data, cls=ExtendedEncoder).encode("utf-8")
 
     def loadb(self, data: bytes) -> SerializableTypes:
-        decoded: SerializableTypes = json.loads(
-            data,
-            object_hook=extended_decoder,
-        )
-        return decoded
+        decoded = json.loads(data, object_hook=extended_decoder)
+        return cast("SerializableTypes", decoded)

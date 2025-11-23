@@ -198,6 +198,7 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
             job.status = JobStatus.FAILED
             job.set_exception(exc)
             self._run_hooks_error(exc)
+            raise
         else:
             job.set_result(result)
             job.status = JobStatus.SUCCESS

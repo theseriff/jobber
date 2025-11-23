@@ -27,6 +27,8 @@ CONTEXT_TYPE_MAP = _build_context_mapping(JobContext)
 def inject_context(func: functools.partial[_R], context: JobContext) -> None:
     sig = inspect.signature(func, eval_str=True)
     for name, param in sig.parameters.items():
+        if param.default is not INJECT:
+            continue
         annotation = param.annotation
         if annotation is inspect.Parameter.empty:
             msg = f"Parameter {name} requires a type annotation for INJECT"
