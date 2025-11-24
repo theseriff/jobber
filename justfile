@@ -4,8 +4,6 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 # Use sh on Unix-like systems
 set shell := ["sh", "-c"]
 
-export VIRTUAL_ENV := ".venv"
-
 [private]
 default:
   @just --list --unsorted --list-heading $'commands…\n'
@@ -20,17 +18,17 @@ init:
 [doc("Install pre-commit hooks")]
 [group("pre-commit")]
 pre-commit-install:
-  uv run --active --frozen pre-commit install
+  uv run --frozen pre-commit install
 
 [doc("Pre-commit all files")]
 [group("pre-commit")]
 pre-commit-all:
-  uv run --active --frozen pre-commit run --show-diff-on-failure --color=always --all-files
+  uv run --frozen pre-commit run --show-diff-on-failure --color=always --all-files
 
 
 # Linter
 _setup_lint *params:
-  uv run --no-dev --group lint --active --frozen {{params}}
+  uv run --no-dev --group lint --frozen {{params}}
 
 [doc("Ruff format")]
 [group("linter")]
@@ -57,7 +55,7 @@ linter: ruff-format ruff-check _codespell
 
 # Static analysis
 _setup_static *params:
-  uv run --no-dev --group lint --active --frozen {{params}}
+  uv run --frozen {{params}}
 
 [doc("Mypy check")]
 [group("static analysis")]
@@ -91,7 +89,7 @@ static-analysis: mypy basedpyright bandit semgrep
 
 # Tests
 _setup_test *params:
-  uv run --no-dev --group test --active --frozen pytest {{params}}
+  uv run --no-dev --group test --frozen pytest {{params}}
 
 [doc("Run all tests")]
 [group("tests")]
