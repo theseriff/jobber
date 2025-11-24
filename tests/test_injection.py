@@ -3,10 +3,13 @@ import functools
 from typing import Any
 from unittest.mock import Mock
 
+import pytest
+
 from jobber import INJECT, Job, Jobber, JobContext, State
 from jobber._internal.common.constants import EMPTY
 from jobber._internal.common.datastructures import RequestState
 from jobber._internal.injection import inject_context
+from jobber.exceptions import JobFailedError
 from jobber.middleware import BaseMiddleware, CallNext
 
 
@@ -62,6 +65,9 @@ async def test_injection_wrong_usage(jobber: Jobber) -> None:
     job2 = await not_exists_type_in_map.schedule().delay(0)
     await job1.wait()
     await job2.wait()
+
+    with pytest.raises(JobFailedError, match=f"job_id: {job1.id}"):
+        job1.result()
 
     assert "Parameter _job requires" in str(job1._exception)
     assert "Unknown type for injection" in str(job2._exception)

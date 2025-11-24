@@ -24,7 +24,7 @@ from jobber._internal.serializers.json import JSONSerializer
 
 if TYPE_CHECKING:
     import asyncio
-    from collections.abc import AsyncIterator, Callable, Iterable, Sequence
+    from collections.abc import AsyncIterator, Callable, Sequence
     from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
     from types import TracebackType
 
@@ -152,106 +152,6 @@ class Jobber:
             _ = functools.update_wrapper(fwrapper, func)
             self._function_registry[fname] = fwrapper
             return fwrapper
-
-        return wrapper
-
-    @overload
-    def on_complete(
-        self,
-        fwrap: FuncWrapper[_FuncParams, _ReturnType],
-        *,
-        hooks: Iterable[Callable[[_ReturnType], None]],
-    ) -> FuncWrapper[_FuncParams, _ReturnType]: ...
-
-    @overload
-    def on_complete(
-        self,
-        *,
-        hooks: Iterable[Callable[[_ReturnType], None]],
-    ) -> Callable[
-        [FuncWrapper[_FuncParams, _ReturnType]],
-        FuncWrapper[_FuncParams, _ReturnType],
-    ]: ...
-
-    def on_complete(
-        self,
-        fwrap: FuncWrapper[_FuncParams, _ReturnType] | None = None,
-        *,
-        hooks: Iterable[Callable[[_ReturnType], None]],
-    ) -> (
-        FuncWrapper[_FuncParams, _ReturnType]
-        | Callable[
-            [FuncWrapper[_FuncParams, _ReturnType]],
-            FuncWrapper[_FuncParams, _ReturnType],
-        ]
-    ):
-        f = self._register_on_success_hooks(hooks)
-        if callable(fwrap):
-            return f(fwrap)
-        return f
-
-    def _register_on_success_hooks(
-        self,
-        callbacks: Iterable[Callable[[_ReturnType], None]],
-    ) -> Callable[
-        [FuncWrapper[_FuncParams, _ReturnType]],
-        FuncWrapper[_FuncParams, _ReturnType],
-    ]:
-        def wrapper(
-            fwrap: FuncWrapper[_FuncParams, _ReturnType],
-        ) -> FuncWrapper[_FuncParams, _ReturnType]:
-            fwrap._on_success_hooks.extend(callbacks)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
-            return fwrap
-
-        return wrapper
-
-    @overload
-    def on_error(
-        self,
-        fwrap: FuncWrapper[_FuncParams, _ReturnType],
-        *,
-        hooks: Iterable[Callable[[Exception], None]],
-    ) -> FuncWrapper[_FuncParams, _ReturnType]: ...
-
-    @overload
-    def on_error(
-        self,
-        *,
-        hooks: Iterable[Callable[[Exception], None]],
-    ) -> Callable[
-        [FuncWrapper[_FuncParams, _ReturnType]],
-        FuncWrapper[_FuncParams, _ReturnType],
-    ]: ...
-
-    def on_error(
-        self,
-        fwrap: FuncWrapper[_FuncParams, _ReturnType] | None = None,
-        *,
-        hooks: Iterable[Callable[[Exception], None]],
-    ) -> (
-        FuncWrapper[_FuncParams, _ReturnType]
-        | Callable[
-            [FuncWrapper[_FuncParams, _ReturnType]],
-            FuncWrapper[_FuncParams, _ReturnType],
-        ]
-    ):
-        f = self._register_on_error_hooks(hooks)
-        if callable(fwrap):
-            return f(fwrap)
-        return f
-
-    def _register_on_error_hooks(
-        self,
-        callbacks: Iterable[Callable[[Exception], None]],
-    ) -> Callable[
-        [FuncWrapper[_FuncParams, _ReturnType]],
-        FuncWrapper[_FuncParams, _ReturnType],
-    ]:
-        def wrapper(
-            fwrap: FuncWrapper[_FuncParams, _ReturnType],
-        ) -> FuncWrapper[_FuncParams, _ReturnType]:
-            fwrap._on_error_hooks.extend(callbacks)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
-            return fwrap
 
         return wrapper
 

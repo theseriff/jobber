@@ -197,12 +197,10 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
             logger.exception("Job %s failed with unexpected error", job.id)
             job.status = JobStatus.FAILED
             job.set_exception(exc)
-            self._run_hooks_error(exc)
             raise
         else:
             job.set_result(result)
             job.status = JobStatus.SUCCESS
-            self._run_hooks_success(result)
         finally:
             event = job._event
             if ctx.cron_parser:
@@ -232,17 +230,3 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
             time_handler=time_handler,
             job_status=JobStatus.SCHEDULED,
         )
-
-    def _run_hooks_success(self, result: _ReturnType) -> None:
-        for call_success in self._on_success_hooks:
-            try:
-                call_success(result)
-            except Exception:  # noqa: PERF203
-                logger.exception("Error executing success hook")
-
-    def _run_hooks_error(self, exc: Exception) -> None:
-        for call_error in self._on_error_hooks:
-            try:
-                call_error(exc)
-            except Exception:  # noqa: PERF203
-                logger.exception("Error executing error hook")
