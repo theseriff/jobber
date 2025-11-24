@@ -93,6 +93,9 @@ addopts = "--strict-markers --strict-config"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
+filterwarnings = [
+    "ignore:to_thread / to_process is ignored for async functions",
+]
 markers = []
 
 [tool.coverage.run]

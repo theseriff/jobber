@@ -33,7 +33,6 @@ async def f2(num: int) -> int:
         pytest.param("delay", 2, 3),
     ],
 )
-@pytest.mark.filterwarnings("ignore:.*(to_thread|to_process).*:RuntimeWarning")
 async def test_jobber(  # noqa: PLR0913
     jobber: Jobber,
     now: datetime,

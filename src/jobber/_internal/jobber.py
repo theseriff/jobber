@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import functools
+import warnings
 from contextlib import asynccontextmanager
 from typing import (
     TYPE_CHECKING,
@@ -13,7 +15,7 @@ from typing import (
 )
 from zoneinfo import ZoneInfo
 
-from jobber._internal.common.constants import ExecutionMode
+from jobber._internal.common.constants import EMPTY, ExecutionMode
 from jobber._internal.common.datastructures import State
 from jobber._internal.context import AppContext, ExecutorsPool
 from jobber._internal.durable.dummy import DummyRepository
@@ -23,7 +25,6 @@ from jobber._internal.middleware.pipeline import MiddlewarePipeline
 from jobber._internal.serializers.json import JSONSerializer
 
 if TYPE_CHECKING:
-    import asyncio
     from collections.abc import AsyncIterator, Callable, Sequence
     from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
     from types import TracebackType
@@ -92,7 +93,7 @@ class Jobber:
         self,
         *,
         job_name: str | None = None,
-        exec_mode: ExecutionMode = ExecutionMode.MAIN,
+        exec_mode: ExecutionMode = EMPTY,
     ) -> Callable[
         [Callable[_FuncParams, _ReturnType]],
         FuncWrapper[_FuncParams, _ReturnType],
@@ -104,7 +105,7 @@ class Jobber:
         func: Callable[_FuncParams, _ReturnType],
         *,
         job_name: str | None = None,
-        exec_mode: ExecutionMode = ExecutionMode.MAIN,
+        exec_mode: ExecutionMode = EMPTY,
     ) -> FuncWrapper[_FuncParams, _ReturnType]: ...
 
     def register(
@@ -112,7 +113,7 @@ class Jobber:
         func: Callable[_FuncParams, _ReturnType] | None = None,
         *,
         job_name: str | None = None,
-        exec_mode: ExecutionMode = ExecutionMode.MAIN,
+        exec_mode: ExecutionMode = EMPTY,
     ) -> (
         FuncWrapper[_FuncParams, _ReturnType]
         | Callable[
@@ -137,9 +138,24 @@ class Jobber:
         def wrapper(
             func: Callable[_FuncParams, _ReturnType],
         ) -> FuncWrapper[_FuncParams, _ReturnType]:
+            nonlocal exec_mode
+
+            is_async = asyncio.iscoroutinefunction(func)
+            if is_async:
+                if exec_mode is not ExecutionMode.MAIN:
+                    msg = (
+                        "to_thread / to_process is ignored for async functions"
+                        " — they are executed in the main event loop anyway"
+                    )
+                    warnings.warn(msg, category=RuntimeWarning, stacklevel=3)
+                exec_mode = ExecutionMode.MAIN
+            elif exec_mode is EMPTY:
+                exec_mode = ExecutionMode.THREAD
+
             fname = job_name or create_default_name(func)
             if fwrapper := self._function_registry.get(fname):
                 return cast("FuncWrapper[_FuncParams, _ReturnType]", fwrapper)
+
             fwrapper = FuncWrapper(
                 state=self.state,
                 job_name=fname,

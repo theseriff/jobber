@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import warnings
 from abc import ABC
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -132,13 +131,6 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
         job_id: str,
         cron_parser: CronParser | None = None,
     ) -> Job[_ReturnType]:
-        is_async = asyncio.iscoroutinefunction(self._func_injected)
-        if is_async and self._exec_mode is not ExecutionMode.MAIN:
-            msg = (
-                "to_thread / to_process is ignored for async functions — "
-                "they are executed in the main event loop anyway"
-            )
-            warnings.warn(msg, category=RuntimeWarning, stacklevel=3)
         delay_seconds = self._calculate_delay_seconds(now=now, at=at)
         job = Job(
             exec_at=at,
