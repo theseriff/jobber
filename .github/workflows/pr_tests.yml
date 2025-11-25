@@ -69,7 +69,5 @@ jobs:
         with:
           python-version: "${{ matrix.py_version }}"
       - uses: extractions/setup-just@e33e0265a09d6d736e2ee1e0eb685ef1de4669ff # v3.0.0
-      - name: Install Dependencies and library
-        run: uv sync --no-dev --group test
       - name: Run all tests
         run: just test-coverage-all
