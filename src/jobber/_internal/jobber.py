@@ -21,7 +21,7 @@ from jobber._internal.context import AppContext, ExecutorsPool
 from jobber._internal.durable.dummy import DummyRepository
 from jobber._internal.durable.sqlite import SQLiteJobRepository
 from jobber._internal.func_wrapper import FuncWrapper, create_default_name
-from jobber._internal.middleware.pipeline import MiddlewarePipeline
+from jobber._internal.middleware.base import MiddlewarePipeline
 from jobber._internal.serializers.json import JSONSerializer
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ _AppType = TypeVar("_AppType", bound="Jobber")
 
 
 @asynccontextmanager
-async def default_lifespan(_: Jobber) -> AsyncIterator[None]:
+async def _lifespan_stub(_: Jobber) -> AsyncIterator[None]:
     yield None
 
 
@@ -59,8 +59,11 @@ class Jobber:
         threadpool_executor: ThreadPoolExecutor | None = None,
         processpool_executor: ProcessPoolExecutor | None = None,
     ) -> None:
+        user_middlewares = middleware or []
+        self.middleware: MiddlewarePipeline = MiddlewarePipeline(
+            [*user_middlewares]
+        )
         self.state: State = State()
-        self.middleware: MiddlewarePipeline = MiddlewarePipeline(middleware)
         if durable is False:
             durable = DummyRepository()
         elif durable is None:
@@ -77,7 +80,7 @@ class Jobber:
             asyncio_tasks=set(),
         )
         self._lifespan: AsyncIterator[None] = self._run_lifespan(
-            lifespan or default_lifespan,
+            lifespan or _lifespan_stub,
         )
         self._function_registry: dict[str, FuncWrapper[..., Any]] = {}  # pyright: ignore[reportExplicitAny]
         self._job_registry: dict[str, Job[Any]] = {}  # pyright: ignore[reportExplicitAny]
@@ -144,8 +147,8 @@ class Jobber:
             if is_async:
                 if exec_mode in (ExecutionMode.PROCESS, ExecutionMode.THREAD):
                     msg = (
-                        "to_thread / to_process is ignored for async functions"
-                        " — they are executed in the main event loop anyway"
+                        "Async functions are always done in the main loop."
+                        " This mode (PROCESS/THREAD) is not used."
                     )
                     warnings.warn(msg, category=RuntimeWarning, stacklevel=3)
                 exec_mode = ExecutionMode.MAIN

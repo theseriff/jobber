@@ -10,7 +10,6 @@ StatelessLifespan: TypeAlias = Callable[
     AbstractAsyncContextManager[None],
 ]
 StatefulLifespan: TypeAlias = Callable[
-    [AppType],
-    AbstractAsyncContextManager[Mapping[str, Any]],
+    [AppType], AbstractAsyncContextManager[Mapping[str, Any]]
 ]
 Lifespan: TypeAlias = StatelessLifespan[AppType] | StatefulLifespan[AppType]

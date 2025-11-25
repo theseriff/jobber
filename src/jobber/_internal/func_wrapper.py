@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from jobber._internal.common.constants import ExecutionMode
     from jobber._internal.common.datastructures import State
     from jobber._internal.context import AppContext
-    from jobber._internal.middleware.pipeline import MiddlewarePipeline
+    from jobber._internal.middleware.base import MiddlewarePipeline
     from jobber._internal.runner.job import Job
 
 

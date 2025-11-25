@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from jobber._internal.context import AppContext
-    from jobber._internal.middleware.pipeline import MiddlewarePipeline
+    from jobber._internal.middleware.base import MiddlewarePipeline
 
 
 logger = logging.getLogger("jobber.runner")

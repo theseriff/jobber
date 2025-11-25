@@ -94,7 +94,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 filterwarnings = [
-    "ignore:to_thread / to_process is ignored for async functions",
+    "ignore:Async functions are always done in the main loop",
 ]
 markers = []
 
