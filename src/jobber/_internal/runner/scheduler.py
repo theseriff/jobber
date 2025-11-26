@@ -7,48 +7,41 @@ import logging
 from abc import ABC
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Generic, ParamSpec, TypeVar, cast, final
+from typing import TYPE_CHECKING, Generic, TypeVar, cast, final
 from uuid import uuid4
 
-from jobber._internal.common.constants import ExecutionMode, JobStatus
+from jobber._internal.common.constants import JobStatus
 from jobber._internal.common.cron_parser import CronParser
 from jobber._internal.common.datastructures import RequestState, State
 from jobber._internal.context import JobContext
 from jobber._internal.exceptions import HandlerSkippedError, NegativeDelayError
-from jobber._internal.runner.executor import Executor
 from jobber._internal.runner.job import Job
 
 if TYPE_CHECKING:
-    import functools
-    from collections.abc import Callable
-
     from jobber._internal.context import AppContext
-    from jobber._internal.middleware.base import MiddlewarePipeline
+    from jobber._internal.middleware.base import CallNext
+    from jobber._internal.runner.runnable import Runnable
 
 
 logger = logging.getLogger("jobber.runner")
 
-_ReturnType = TypeVar("_ReturnType")
-_FuncParams = ParamSpec("_FuncParams")
+_R = TypeVar("_R")
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
-class ScheduleContext(Generic[_ReturnType]):
-    job: Job[_ReturnType]
+class ScheduleContext(Generic[_R]):
+    job: Job[_R]
     cron_parser: CronParser | None
 
 
 @final
-class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
+class ScheduleBuilder(ABC, Generic[_R]):
     __slots__: tuple[str, ...] = (
         "_app_ctx",
-        "_exec_mode",
-        "_func_injected",
         "_job_name",
         "_job_registry",
-        "_middleware",
-        "_on_error_hooks",
-        "_on_success_hooks",
+        "_middleware_chain",
+        "_runnable",
         "_state",
     )
 
@@ -56,23 +49,17 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
         self,
         *,
         app_ctx: AppContext,
-        exec_mode: ExecutionMode,
-        func_injected: functools.partial[_ReturnType],
+        runnable: Runnable[_R],
         job_name: str,
-        job_registry: dict[str, Job[_ReturnType]],
-        middleware: MiddlewarePipeline,
-        on_error_hooks: list[Callable[[Exception], None]],
-        on_success_hooks: list[Callable[[_ReturnType], None]],
+        job_registry: dict[str, Job[_R]],
+        middleware_chain: CallNext,
         state: State,
     ) -> None:
         self._app_ctx = app_ctx
-        self._exec_mode = exec_mode
-        self._func_injected = func_injected
+        self._runnable = runnable
         self._job_name = job_name
         self._job_registry = job_registry
-        self._middleware = middleware
-        self._on_error_hooks = on_error_hooks
-        self._on_success_hooks = on_success_hooks
+        self._middleware_chain = middleware_chain
         self._state: State = state
 
     async def cron(
@@ -82,7 +69,7 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
         *,
         now: datetime | None = None,
         job_id: str | None = None,
-    ) -> Job[_ReturnType]:
+    ) -> Job[_R]:
         now = now or datetime.now(tz=self._app_ctx.tz)
         cron_parser = CronParser(expression=expression)
         next_at = cron_parser.next_run(now=now)
@@ -100,7 +87,7 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
         *,
         now: datetime | None = None,
         job_id: str | None = None,
-    ) -> Job[_ReturnType]:
+    ) -> Job[_R]:
         now = now or datetime.now(tz=self._app_ctx.tz)
         at = now + timedelta(seconds=delay_seconds)
         return await self._at(
@@ -116,7 +103,7 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
         *,
         now: datetime | None = None,
         job_id: str | None = None,
-    ) -> Job[_ReturnType]:
+    ) -> Job[_R]:
         return await self._at(
             now=now or datetime.now(tz=at.tzinfo),
             at=at,
@@ -130,7 +117,7 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
         at: datetime,
         job_id: str,
         cron_parser: CronParser | None = None,
-    ) -> Job[_ReturnType]:
+    ) -> Job[_R]:
         delay_seconds = self._calculate_delay_seconds(now=now, at=at)
         job = Job(
             exec_at=at,
@@ -160,28 +147,22 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
             raise NegativeDelayError(delay_seconds)
         return delay_seconds
 
-    def _schedule_execution(self, ctx: ScheduleContext[_ReturnType]) -> None:
+    def _schedule_execution(self, ctx: ScheduleContext[_R]) -> None:
         task = asyncio.create_task(self._exec_job(ctx=ctx))
         self._app_ctx.asyncio_tasks.add(task)
         task.add_done_callback(self._app_ctx.asyncio_tasks.discard)
 
-    async def _exec_job(self, *, ctx: ScheduleContext[_ReturnType]) -> None:
+    async def _exec_job(self, *, ctx: ScheduleContext[_R]) -> None:
         job = ctx.job
         job.status = JobStatus.RUNNING
         job_context = JobContext(
             job=job,
             state=self._state,
             request_state=RequestState(),
+            runnable=self._runnable,
         )
-        executor = Executor(
-            exec_mode=self._exec_mode,
-            func_injected=self._func_injected,
-            executors_pool=self._app_ctx.executors,
-            getloop=self._app_ctx.getloop,
-        )
-        middleware_chain = self._middleware.compose(executor)
         try:
-            result = await middleware_chain(job_context)
+            result = await self._middleware_chain(job_context)
         except HandlerSkippedError:
             logger.debug("Job %s execution was skipped by middleware", job.id)
             job.status = JobStatus.SKIPPED
@@ -203,7 +184,7 @@ class JobScheduler(ABC, Generic[_FuncParams, _ReturnType]):
 
     async def _reschedule_cron(
         self,
-        scheduler_ctx: ScheduleContext[_ReturnType],
+        scheduler_ctx: ScheduleContext[_R],
     ) -> None:
         cron_parser = cast("CronParser", scheduler_ctx.cron_parser)
         now = datetime.now(tz=self._app_ctx.tz)

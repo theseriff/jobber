@@ -69,7 +69,7 @@ test = [
     "covdefaults>=2.3.0",
 ]
 docs = [
-    "zensical==0.0.6",
+    "zensical==0.0.10",
 ]
 dev = [
     { include-group = "lint" },
@@ -182,7 +182,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "benchmarks/**" = ["D", "S101"]
 "tests/**" = ["S101", "D", "SLF001"]
-"src/jobber/_internal/func_wrapper.py" = ["ERA001", "FIX004"]
+"src/jobber/_internal/routing.py" = ["ERA001", "FIX004"]
 
 [tool.ruff.format]
 docstring-code-format = true

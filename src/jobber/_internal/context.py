@@ -1,4 +1,3 @@
-# pyright: reportExplicitAny=false
 import asyncio
 import multiprocessing
 import sys
@@ -8,13 +7,14 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from jobber._internal.common.datastructures import RequestState, State
-from jobber._internal.durable.abc import JobRepository
 from jobber._internal.runner.job import Job
+from jobber._internal.runner.runnable import Runnable
 from jobber._internal.serializers.abc import JobsSerializer
+from jobber._internal.storage.abc import JobRepository
 
 
 @dataclass(slots=True, kw_only=True)
-class ExecutorsPool:
+class WorkerPools:
     _processpool: ProcessPoolExecutor | None
     threadpool: ThreadPoolExecutor | None = None
 
@@ -41,6 +41,7 @@ class JobContext:
     job: Job[Any]
     state: State
     request_state: RequestState
+    runnable: Runnable[Any]
 
 
 @dataclass(slots=True, kw_only=True)
@@ -48,7 +49,7 @@ class AppContext:
     _loop: asyncio.AbstractEventLoop | None
     tz: ZoneInfo
     durable: JobRepository
-    executors: ExecutorsPool
+    worker_pools: WorkerPools
     serializer: JobsSerializer
     asyncio_tasks: set[asyncio.Task[Any]]
 
@@ -58,4 +59,4 @@ class AppContext:
         return self._loop
 
     def close(self) -> None:
-        self.executors.close()
+        self.worker_pools.close()
