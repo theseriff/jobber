@@ -1,3 +1,6 @@
+from typing import NoReturn
+
+
 class BaseJobberError(Exception):
     pass
 
@@ -72,3 +75,36 @@ class JobSkippedError(BaseJobberError):
         ),
     ) -> None:
         super().__init__(message)
+
+
+class ApplicationStateError(BaseJobberError):
+    """Raised when app is in wrong state for the requested operation."""
+
+    def __init__(
+        self,
+        *,
+        operation: str,
+        required_state: str,
+        actual_state: str,
+    ) -> None:
+        message = (
+            f"Cannot {operation!r} - application must be {required_state!r}, "
+            f"but is currently {actual_state!r}."
+        )
+        super().__init__(message)
+
+
+def raise_app_not_started_error(operation: str) -> NoReturn:
+    raise ApplicationStateError(
+        operation=operation,
+        required_state="started",
+        actual_state="not started",
+    )
+
+
+def raise_app_already_started_error(operation: str) -> NoReturn:
+    raise ApplicationStateError(
+        operation=operation,
+        required_state="not started",
+        actual_state="started",
+    )

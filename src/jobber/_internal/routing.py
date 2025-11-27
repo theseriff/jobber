@@ -13,31 +13,28 @@ from typing import (
 )
 from uuid import uuid4
 
-from jobber._internal.middleware.base import (
-    BaseMiddleware,
-    MiddlewarePipeline,
-)
-from jobber._internal.runner.executor import Executor
+from jobber._internal.common.constants import EMPTY
+from jobber._internal.exceptions import raise_app_not_started_error
 from jobber._internal.runner.runnable import Runnable
 from jobber._internal.runner.scheduler import ScheduleBuilder
 
 if TYPE_CHECKING:
-    from collections import deque
     from collections.abc import Callable, Coroutine
     from types import CoroutineType
 
     from jobber._internal.common.constants import ExecutionMode
     from jobber._internal.common.datastructures import State
     from jobber._internal.context import AppContext
+    from jobber._internal.middleware.base import CallNext
     from jobber._internal.runner.job import Job
 
 
-_FuncParams = ParamSpec("_FuncParams")
-_ReturnType = TypeVar("_ReturnType")
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
 _T = TypeVar("_T")
 
 
-def create_default_name(func: Callable[_FuncParams, _ReturnType], /) -> str:
+def create_default_name(func: Callable[_P, _R], /) -> str:
     fname = func.__name__
     fmodule = func.__module__
     if fname == "<lambda>":
@@ -48,17 +45,16 @@ def create_default_name(func: Callable[_FuncParams, _ReturnType], /) -> str:
 
 
 @final
-class Route(Generic[_FuncParams, _ReturnType]):
+class Route(Generic[_P, _R]):
     def __init__(  # noqa: PLR0913
         self,
         *,
         state: State,
         job_name: str,
         app_ctx: AppContext,
-        original_func: Callable[_FuncParams, _ReturnType],
+        original_func: Callable[_P, _R],
         exec_mode: ExecutionMode,
-        job_registry: dict[str, Job[_ReturnType]],
-        user_middleware: deque[BaseMiddleware],
+        job_registry: dict[str, Job[_R]],
     ) -> None:
         self._state = state
         self._app_ctx = app_ctx
@@ -66,14 +62,7 @@ class Route(Generic[_FuncParams, _ReturnType]):
         self._exec_mode = exec_mode
         self._job_registry = job_registry
         self._original_func = original_func
-        self._middleware_chain = MiddlewarePipeline(
-            user_middleware,
-        ).build_chain(
-            Executor[_ReturnType](
-                worker_pools=app_ctx.worker_pools,
-                getloop=app_ctx.getloop,
-            )
-        )
+        self._middleware_chain: CallNext = EMPTY
 
         # --------------------------------------------------------------------
         # HACK: ProcessPoolExecutor / Multiprocessing
@@ -117,37 +106,40 @@ class Route(Generic[_FuncParams, _ReturnType]):
 
     def __call__(
         self,
-        *args: _FuncParams.args,
-        **kwargs: _FuncParams.kwargs,
-    ) -> _ReturnType:
+        *args: _P.args,
+        **kwargs: _P.kwargs,
+    ) -> _R:
         return self._original_func(*args, **kwargs)
 
     @overload
     def schedule(
-        self: Route[_FuncParams, CoroutineType[object, object, _T]],
-        *args: _FuncParams.args,
-        **kwargs: _FuncParams.kwargs,
+        self: Route[_P, CoroutineType[object, object, _T]],
+        *args: _P.args,
+        **kwargs: _P.kwargs,
     ) -> ScheduleBuilder[_T]: ...
 
     @overload
     def schedule(
-        self: Route[_FuncParams, Coroutine[object, object, _T]],
-        *args: _FuncParams.args,
-        **kwargs: _FuncParams.kwargs,
+        self: Route[_P, Coroutine[object, object, _T]],
+        *args: _P.args,
+        **kwargs: _P.kwargs,
     ) -> ScheduleBuilder[_T]: ...
 
     @overload
     def schedule(
-        self: Route[_FuncParams, _ReturnType],
-        *args: _FuncParams.args,
-        **kwargs: _FuncParams.kwargs,
-    ) -> ScheduleBuilder[_ReturnType]: ...
+        self: Route[_P, _R],
+        *args: _P.args,
+        **kwargs: _P.kwargs,
+    ) -> ScheduleBuilder[_R]: ...
 
     def schedule(
         self,
-        *args: _FuncParams.args,
-        **kwargs: _FuncParams.kwargs,
+        *args: _P.args,
+        **kwargs: _P.kwargs,
     ) -> ScheduleBuilder[Any]:
+        if not self._app_ctx.app_started:
+            raise_app_not_started_error("schedule")
+
         runnable = Runnable(
             self._original_func,
             self._exec_mode,

@@ -1,7 +1,7 @@
 # pyright: reportPrivateUsage=false
 import asyncio
 from datetime import datetime
-from unittest import mock
+from unittest.mock import call, patch
 
 import pytest
 
@@ -33,8 +33,7 @@ async def f2(num: int) -> int:
         pytest.param("delay", 2, 3),
     ],
 )
-async def test_jobber(  # noqa: PLR0913
-    jobber: Jobber,
+async def test_jobber(
     now: datetime,
     *,
     method: str,
@@ -42,26 +41,29 @@ async def test_jobber(  # noqa: PLR0913
     expected: int,
     exec_mode: ExecutionMode,
 ) -> None:
+    jobber = Jobber()
     f1_reg = jobber.register(f1, job_name="f1_reg", exec_mode=exec_mode)
     f2_reg = jobber.register(f2, job_name="f2_reg", exec_mode=exec_mode)
-    if method == "at":
-        job_sync = await f1_reg.schedule(num).at(now, now=now)
-        job_async = await f2_reg.schedule(num).at(now, now=now)
-    elif method == "delay":
-        job_sync = await f1_reg.schedule(num).delay(0, now=now)
-        job_async = await f2_reg.schedule(num).delay(0, now=now)
-    elif method == "cron":
-        with mock.patch.object(CronParser, "next_run", return_value=now) as m:
-            job_sync = await f1_reg.schedule(num).cron("* * * * *", now=now)
-            job_async = await f2_reg.schedule(num).cron("* * * * *", now=now)
-        m.assert_has_calls(calls=[mock.call(now=now), mock.call(now=now)])
-    else:
-        raise NotImplementedError
+    async with jobber:
+        if method == "at":
+            job_sync = await f1_reg.schedule(num).at(now, now=now)
+            job_async = await f2_reg.schedule(num).at(now, now=now)
+        elif method == "delay":
+            job_sync = await f1_reg.schedule(num).delay(0, now=now)
+            job_async = await f2_reg.schedule(num).delay(0, now=now)
+        elif method == "cron":
+            exp = "* * * * *"
+            with patch.object(CronParser, "next_run", return_value=now) as m:
+                job_sync = await f1_reg.schedule(num).cron(exp, now=now)
+                job_async = await f2_reg.schedule(num).cron(exp, now=now)
+            m.assert_has_calls(calls=[call(now=now), call(now=now)])
+        else:
+            raise NotImplementedError
 
-    _ = await asyncio.gather(job_sync.wait(), job_async.wait())
-    if method == "cron":
-        await job_sync.cancel()
-        await job_async.cancel()
+        _ = await asyncio.gather(job_sync.wait(), job_async.wait())
+        if method == "cron":
+            await job_sync.cancel()
+            await job_async.cancel()
 
     assert job_sync.result() == expected
     assert job_async.result() == expected

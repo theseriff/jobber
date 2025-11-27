@@ -37,14 +37,6 @@ class WorkerPools:
 
 
 @dataclass(slots=True, kw_only=True)
-class JobContext:
-    job: Job[Any]
-    state: State
-    request_state: RequestState
-    runnable: Runnable[Any]
-
-
-@dataclass(slots=True, kw_only=True)
 class AppContext:
     _loop: asyncio.AbstractEventLoop | None
     tz: ZoneInfo
@@ -52,6 +44,7 @@ class AppContext:
     worker_pools: WorkerPools
     serializer: JobsSerializer
     asyncio_tasks: set[asyncio.Task[Any]]
+    app_started: bool = False
 
     def getloop(self) -> asyncio.AbstractEventLoop:
         if self._loop is None:
@@ -60,3 +53,11 @@ class AppContext:
 
     def close(self) -> None:
         self.worker_pools.close()
+
+
+@dataclass(slots=True, kw_only=True)
+class JobContext:
+    job: Job[Any]
+    state: State
+    request_state: RequestState
+    runnable: Runnable[Any]

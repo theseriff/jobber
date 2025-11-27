@@ -12,6 +12,9 @@ class _MarkerInject:
     pass
 
 
+INJECT: Any = _MarkerInject()
+
+
 def _build_context_mapping(context_cls: type[JobContext]) -> dict[type, str]:
     type_hints = get_type_hints(context_cls)
     return {
@@ -20,7 +23,6 @@ def _build_context_mapping(context_cls: type[JobContext]) -> dict[type, str]:
     }
 
 
-INJECT: Any = _MarkerInject()
 CONTEXT_TYPE_MAP = _build_context_mapping(JobContext)
 
 

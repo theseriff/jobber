@@ -26,7 +26,8 @@ async def test_middleware() -> None:
     amock = AsyncMock(return_value=1)
     amock.__signature__ = inspect.Signature()
 
-    jobber = Jobber(middleware=[MyMiddleware()])
+    jobber = Jobber()
+    jobber.add_middleware(MyMiddleware())
     f = jobber.register(amock)
 
     async with jobber:
@@ -60,8 +61,8 @@ async def test_exception_middleware() -> None:
 
     sync_handler = Mock()
     async_handler = AsyncMock()
-    jobber.exception_handler.use(ValueError, sync_handler)
-    jobber.exception_handler.use(TimeoutError, async_handler)
+    jobber.add_exception_handler(ValueError, sync_handler)
+    jobber.add_exception_handler(TimeoutError, async_handler)
 
     async with jobber:
         job1 = await f1.schedule().delay(0)
@@ -69,5 +70,5 @@ async def test_exception_middleware() -> None:
         await job1.wait()
         await job2.wait()
 
-        sync_handler.assert_called_once_with(ANY, job1._exception)
-        async_handler.assert_awaited_once_with(ANY, job2._exception)
+    sync_handler.assert_called_once_with(ANY, job1._exception)
+    async_handler.assert_awaited_once_with(ANY, job2._exception)
