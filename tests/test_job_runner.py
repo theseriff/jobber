@@ -5,15 +5,18 @@ from jobber import Jobber
 from jobber._internal.common.constants import JobStatus
 
 
-async def test_job(jobber: Jobber) -> None:
+async def test_job() -> None:
+    jobber = Jobber()
+
     @jobber.register(job_name="t")
     def t(num: int) -> int:
         return num + 1
 
-    job1 = await t.schedule(1).delay(0)
-    job2 = await t.schedule(1).delay(0.01)
-    assert str(job1).startswith(f"Job(instance_id={id(job1)}")
-    assert str(job2).startswith(f"Job(instance_id={id(job2)}")
+    async with jobber:
+        job1 = await t.schedule(1).delay(0)
+        job2 = await t.schedule(1).delay(0.01)
+        assert str(job1).startswith(f"Job(instance_id={id(job1)}")
+        assert str(job2).startswith(f"Job(instance_id={id(job2)}")
 
     await job1.wait()
     with pytest.warns(RuntimeWarning, match="Job is already done"):

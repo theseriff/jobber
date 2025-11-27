@@ -60,7 +60,9 @@ async def test_injection() -> None:
         assert request_test_num == 1
 
 
-async def test_injection_wrong_usage(jobber: Jobber) -> None:
+async def test_injection_wrong_usage() -> None:
+    jobber = Jobber()
+
     @jobber.register
     async def untyped_func(_job=INJECT) -> None:  # type: ignore[no-untyped-def] # pyright: ignore[reportMissingParameterType]  # noqa: ANN001
         pass
@@ -69,14 +71,14 @@ async def test_injection_wrong_usage(jobber: Jobber) -> None:
     async def not_exists_type_in_map(_job: Jobber = INJECT) -> None:
         pass
 
-    job1 = await untyped_func.schedule().delay(0)
-    job2 = await not_exists_type_in_map.schedule().delay(0)
-    await job1.wait()
-    await job2.wait()
+    async with jobber:
+        job1 = await untyped_func.schedule().delay(0)
+        job2 = await not_exists_type_in_map.schedule().delay(0)
+        await job1.wait()
+        await job2.wait()
 
     with pytest.raises(JobFailedError, match=f"job_id: {job1.id}"):
         job1.result()
-
     assert "Parameter _job requires" in str(job1._exception)
     assert "Unknown type for injection" in str(job2._exception)
 

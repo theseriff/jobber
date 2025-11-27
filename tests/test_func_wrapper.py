@@ -29,7 +29,9 @@ def test_create_default_name(func: Callable[..., None]) -> None:
         assert job_name == f"tests.test_func_wrapper:{somefunc.__name__}"
 
 
-async def test_original_func_call(jobber: Jobber) -> None:
+async def test_original_func_call() -> None:
+    jobber = Jobber()
+
     @jobber.register
     def t1(num: int) -> int:
         return num + 1
@@ -43,7 +45,9 @@ async def test_original_func_call(jobber: Jobber) -> None:
     assert await t2(1) == expected_val
 
 
-def test_patch_job_name(jobber: Jobber) -> None:
+def test_patch_job_name() -> None:
+    jobber = Jobber()
+
     @jobber.register
     @jobber.register
     def t() -> None:

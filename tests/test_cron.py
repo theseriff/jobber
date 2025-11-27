@@ -19,17 +19,20 @@ def test_cronparser() -> None:
     assert next_run == expected_run
 
 
-async def test_cron_reschedule(jobber: Jobber, now: datetime) -> None:
+async def test_cron_reschedule(now: datetime) -> None:
+    jobber = Jobber()
+
     @jobber.register
     def t(name: str) -> str:
         return f"hello, {name}!"
 
-    with mock.patch.object(CronParser, "next_run", return_value=now):
-        job = await t.schedule("Biba").cron("* * * * *", now=now)
+    async with jobber:
+        with mock.patch.object(CronParser, "next_run", return_value=now):
+            job = await t.schedule("Biba").cron("* * * * *", now=now)
 
-    cur_exec_at = job.exec_at
-    await job.wait()
-    next_exec_at = job.exec_at
+        cur_exec_at = job.exec_at
+        await job.wait()
+        next_exec_at = job.exec_at
 
-    assert job.result() == "hello, Biba!"
-    assert cur_exec_at != next_exec_at
+        assert job.result() == "hello, Biba!"
+        assert cur_exec_at != next_exec_at
