@@ -45,7 +45,7 @@ class Job(Generic[_R]):
         *,
         job_id: str,
         exec_at: datetime,
-        job_name: str,
+        func_name: str,
         job_registry: dict[str, Job[_R]],
         job_status: JobStatus,
         cron_expression: str | None,
@@ -59,7 +59,7 @@ class Job(Generic[_R]):
         self._timer_handler: asyncio.TimerHandle = EMPTY
         self.cron_expression = cron_expression
         self.exec_at = exec_at
-        self.job_name = job_name
+        self.job_name = func_name
         self.status = job_status
         self.metadata = metadata
 

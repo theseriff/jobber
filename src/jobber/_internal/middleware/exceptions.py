@@ -1,19 +1,23 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, cast, final
+from collections.abc import Awaitable, Callable, Mapping
+from typing import TYPE_CHECKING, Any, TypeAlias, cast, final
 
+from jobber._internal.context import JobContext
 from jobber._internal.middleware.base import BaseMiddleware, CallNext
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from concurrent.futures import ThreadPoolExecutor
 
-    from jobber._internal.common.types import (
-        ExceptionHandler,
-        ExceptionHandlers,
-    )
-    from jobber._internal.context import JobContext
+
+ExceptionHandler: TypeAlias = Callable[
+    [JobContext, Exception], Awaitable[None] | None
+]
+ExceptionHandlers: TypeAlias = dict[type[Exception], ExceptionHandler]
+MappingExceptionHandlers: TypeAlias = Mapping[
+    type[Exception], ExceptionHandler
+]
 
 
 @final

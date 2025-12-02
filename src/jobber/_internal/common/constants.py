@@ -1,14 +1,10 @@
+import warnings
 from enum import Enum, unique
 from typing import Any
 
 from jobber._internal.common.datastructures import EmptyPlaceholder
 
-
-@unique
-class ExecutionMode(str, Enum):
-    MAIN = "main"
-    THREAD = "thread"
-    PROCESS = "process"
+EMPTY: Any = EmptyPlaceholder()
 
 
 @unique
@@ -22,4 +18,22 @@ class JobStatus(str, Enum):
     TIMEOUT = "timeout"
 
 
-EMPTY: Any = EmptyPlaceholder()
+@unique
+class ExecutionMode(str, Enum):
+    MAIN = "main"
+    THREAD = "thread"
+    PROCESS = "process"
+
+
+def get_exec_mode(mode: ExecutionMode, *, is_async: bool) -> ExecutionMode:
+    if is_async:
+        if mode in (ExecutionMode.PROCESS, ExecutionMode.THREAD):
+            msg = (
+                "Async functions are always done in the main loop."
+                " This mode (PROCESS/THREAD) is not used."
+            )
+            warnings.warn(msg, category=RuntimeWarning, stacklevel=3)
+        return ExecutionMode.MAIN
+    if mode is EMPTY:
+        return ExecutionMode.THREAD
+    return mode

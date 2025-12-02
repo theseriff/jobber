@@ -42,8 +42,8 @@ async def test_jobber(  # noqa: PLR0913
     exec_mode: ExecutionMode,
 ) -> None:
     jobber = Jobber(cron_parser_cls=cron_parser_cls)
-    f1_reg = jobber.register(f1, job_name="f1_reg", exec_mode=exec_mode)
-    f2_reg = jobber.register(f2, job_name="f2_reg", exec_mode=exec_mode)
+    f1_reg = jobber.register(f1, func_name="f1_reg", exec_mode=exec_mode)
+    f2_reg = jobber.register(f2, func_name="f2_reg", exec_mode=exec_mode)
     async with jobber:
         if method == "at":
             job_sync = await f1_reg.schedule(num).at(now, now=now)
@@ -66,5 +66,5 @@ async def test_jobber(  # noqa: PLR0913
 
     assert job_sync.result() == expected
     assert job_async.result() == expected
-    assert len(jobber._app_ctx.asyncio_tasks) == 0
+    assert len(jobber.jobber_config.asyncio_tasks) == 0
     assert len(jobber._job_registry) == 0

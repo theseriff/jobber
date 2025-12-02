@@ -1,21 +1,15 @@
 # pyright: reportExplicitAny=false
+import inspect
 from typing import Any
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from jobber import (
-    INJECT,
-    ExecutionMode,
-    Job,
-    Jobber,
-    JobContext,
-    Runnable,
-    State,
-)
+from jobber import INJECT, Job, Jobber, JobContext, State
 from jobber._internal.common.constants import EMPTY
 from jobber._internal.common.datastructures import RequestState
 from jobber._internal.injection import inject_context
+from jobber._internal.runner.runners import create_runnable_factory
 from jobber.exceptions import JobFailedError
 from jobber.middleware import BaseMiddleware, CallNext
 
@@ -84,9 +78,13 @@ async def test_injection_wrong_usage() -> None:
 
 
 async def test_inject_context_skips_non_inject_parameters() -> None:
-    func_mock = Mock(return_value="test")
-    runnable = Runnable(func_mock, ExecutionMode.MAIN, normal_param="test")
-    mock_context = Mock(spec=JobContext)
-    inject_context(runnable, mock_context)
+    amock = AsyncMock(return_value="test")
+    amock.__signature__ = inspect.Signature()
 
-    assert runnable.kwargs.get("normal_param") == "test" == runnable()
+    runnable_factory = create_runnable_factory(amock, Mock(), Mock())
+    runnable = runnable_factory(normal_param="test")
+    inject_context(runnable, Mock(spec=JobContext))
+    result = await runnable()
+
+    amock.assert_awaited_once_with(normal_param="test")
+    assert runnable.kwargs.get("normal_param") == "test" == result

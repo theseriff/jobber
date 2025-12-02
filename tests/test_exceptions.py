@@ -49,7 +49,7 @@ async def test_jobber_runtime_error() -> None:
 async def test_job_not_completed() -> None:
     jobber = Jobber()
 
-    @jobber.register(job_name="f1")
+    @jobber.register(func_name="f1")
     def f1(num: int) -> int:
         return num + 1
 
@@ -68,7 +68,7 @@ async def test_job_not_completed() -> None:
 
 
 async def test_job_timeout() -> None:
-    timeout = 0.05
+    timeout = 0.005
     jobber = Jobber()
 
     @jobber.register(timeout=timeout)
@@ -77,7 +77,7 @@ async def test_job_timeout() -> None:
 
     @jobber.register(timeout=timeout)
     def f2() -> None:
-        time.sleep(0.1)
+        time.sleep(0.01)
 
     async with jobber:
         job1 = await f1.schedule().delay(0)
