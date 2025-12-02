@@ -15,16 +15,18 @@ from uuid import uuid4
 
 from jobber._internal.common.constants import EMPTY
 from jobber._internal.exceptions import raise_app_not_started_error
-from jobber._internal.runner.runnable import Runnable
+from jobber._internal.runner.runners import Runnable, create_runnable_factory
 from jobber._internal.runner.scheduler import ScheduleBuilder
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Mapping
+    from collections.abc import Callable, Coroutine
     from types import CoroutineType
 
-    from jobber._internal.common.constants import ExecutionMode
     from jobber._internal.common.datastructures import State
-    from jobber._internal.context import AppContext
+    from jobber._internal.configuration import (
+        JobberConfiguration,
+        RouteConfiguration,
+    )
     from jobber._internal.middleware.base import CallNext
     from jobber._internal.runner.job import Job
 
@@ -46,27 +48,28 @@ def create_default_name(func: Callable[_P, _R], /) -> str:
 
 @final
 class JobRoute(Generic[_P, _R]):
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         *,
         state: State,
-        job_name: str,
-        app_ctx: AppContext,
+        jobber_configuration: JobberConfiguration,
         original_func: Callable[_P, _R],
-        exec_mode: ExecutionMode,
         job_registry: dict[str, Job[_R]],
-        metadata: Mapping[str, Any] | None,
-        timeout: float,
+        configuration: RouteConfiguration,
     ) -> None:
-        self._state = state
-        self._app_ctx = app_ctx
-        self._job_name = job_name
-        self._exec_mode = exec_mode
+        self._jobber_configuration = jobber_configuration
         self._job_registry = job_registry
         self._original_func = original_func
+        self._runnable_factory: Callable[_P, Runnable[_R]] = (
+            create_runnable_factory(
+                original_func,
+                configuration,
+                jobber_configuration,
+            )
+        )
         self._middleware_chain: CallNext = EMPTY
-        self._metadata = metadata
-        self._timeout = timeout
+        self.configuration = configuration
+        self.state = state
 
         # --------------------------------------------------------------------
         # HACK: ProcessPoolExecutor / Multiprocessing
@@ -141,22 +144,14 @@ class JobRoute(Generic[_P, _R]):
         *args: _P.args,
         **kwargs: _P.kwargs,
     ) -> ScheduleBuilder[Any]:
-        if not self._app_ctx.app_started:
+        if not self._jobber_configuration.app_started:
             raise_app_not_started_error("schedule")
 
-        runnable = Runnable(
-            self._original_func,
-            self._exec_mode,
-            *args,
-            **kwargs,
-        )
         return ScheduleBuilder(
-            app_ctx=self._app_ctx,
-            runnable=runnable,
-            job_name=self._job_name,
+            state=self.state,
+            runnable=self._runnable_factory(*args, **kwargs),
+            jobber_config=self._jobber_configuration,
             job_registry=self._job_registry,
+            configuration=self.configuration,
             middleware_chain=self._middleware_chain,
-            state=self._state,
-            timeout=self._timeout,
-            metadata=self._metadata,
         )

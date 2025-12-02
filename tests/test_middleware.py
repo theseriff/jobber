@@ -23,7 +23,7 @@ class MyMiddleware(BaseMiddleware):
 
 
 async def test_middleware() -> None:
-    amock = AsyncMock(return_value=1)
+    amock = AsyncMock(return_value="test")
     amock.__signature__ = inspect.Signature()
 
     jobber = Jobber()

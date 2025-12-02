@@ -12,7 +12,7 @@ from jobber._internal.common.datastructures import RequestState, State
 from jobber._internal.context import JobContext
 from jobber._internal.injection import INJECT
 from jobber._internal.runner.job import Job
-from jobber._internal.runner.runnable import Runnable
+from jobber._internal.runner.runners import Runnable
 from jobber._internal.runner.scheduler import ScheduleBuilder
 from jobber.jobber import Jobber
 

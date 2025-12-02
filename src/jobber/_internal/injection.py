@@ -2,7 +2,7 @@ import inspect
 from typing import Any, TypeVar, get_origin, get_type_hints
 
 from jobber._internal.context import JobContext
-from jobber._internal.runner.runnable import Runnable
+from jobber._internal.runner.runners import Runnable
 
 _R = TypeVar("_R")
 
@@ -26,7 +26,7 @@ CONTEXT_TYPE_MAP = _build_context_mapping(JobContext)
 
 
 def inject_context(runnable: Runnable[_R], context: JobContext) -> None:
-    sig = inspect.signature(runnable.func)
+    sig = inspect.signature(runnable.strategy.func)
     for name, param in sig.parameters.items():
         if param.default is not INJECT:
             continue

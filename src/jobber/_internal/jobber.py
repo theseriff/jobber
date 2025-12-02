@@ -4,15 +4,26 @@ import asyncio
 import functools
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast, overload
 
-from jobber._internal.common.constants import EMPTY, ExecutionMode
+from jobber._internal.common.constants import (
+    EMPTY,
+    ExecutionMode,
+    get_exec_mode,
+)
 from jobber._internal.common.datastructures import State
-from jobber._internal.context import AppContext, JobContext, WorkerPools
+from jobber._internal.configuration import (
+    JobberConfiguration,
+    RouteConfiguration,
+    WorkerPools,
+)
 from jobber._internal.exceptions import raise_app_already_started_error
 from jobber._internal.injection import inject_context
 from jobber._internal.middleware.base import build_middleware
-from jobber._internal.middleware.exceptions import ExceptionMiddleware
+from jobber._internal.middleware.exceptions import (
+    ExceptionHandler,
+    ExceptionHandlers,
+    ExceptionMiddleware,
+)
 from jobber._internal.routing import JobRoute, create_default_name
-from jobber._internal.runner.runnable import iscoroutinerunnable
 
 if TYPE_CHECKING:
     from collections import deque
@@ -21,15 +32,12 @@ if TYPE_CHECKING:
     from types import TracebackType
     from zoneinfo import ZoneInfo
 
-    from jobber._internal.common.types import (
-        ExceptionHandler,
-        ExceptionHandlers,
-        Lifespan,
-    )
+    from jobber._internal.common.types import Lifespan
+    from jobber._internal.context import JobContext
     from jobber._internal.cron_parser import CronParser
     from jobber._internal.middleware.base import BaseMiddleware
     from jobber._internal.runner.job import Job
-    from jobber._internal.runner.runnable import Runnable
+    from jobber._internal.runner.runners import Runnable
     from jobber._internal.serializers.abc import JobsSerializer
     from jobber._internal.storage.abc import JobRepository
 
@@ -49,13 +57,14 @@ class Jobber:
         serializer: JobsSerializer,
         middleware: deque[BaseMiddleware],
         exception_handlers: ExceptionHandlers,
-        loop: asyncio.AbstractEventLoop | None,
+        loop_factory: Callable[[], asyncio.AbstractEventLoop],
         threadpool_executor: ThreadPoolExecutor | None,
         processpool_executor: ProcessPoolExecutor | None,
         cron_parser_cls: type[CronParser],
     ) -> None:
-        self._app_ctx: AppContext = AppContext(
-            _loop=loop,
+        self.jobber_config: JobberConfiguration = JobberConfiguration(
+            loop_factory=loop_factory,
+            asyncio_tasks=set(),
             tz=tz,
             durable=durable,
             worker_pools=WorkerPools(
@@ -64,7 +73,6 @@ class Jobber:
             ),
             serializer=serializer,
             cron_parser_cls=cron_parser_cls,
-            asyncio_tasks=set(),
         )
         self._lifespan: AsyncIterator[None] = self._run_lifespan(lifespan)
         self._routes: dict[str, JobRoute[..., Any]] = {}
@@ -78,12 +86,12 @@ class Jobber:
         cls_exc: type[Exception],
         handler: ExceptionHandler,
     ) -> None:
-        if self._app_ctx.app_started is True:
+        if self.jobber_config.app_started is True:
             raise_app_already_started_error("add_exception_handler")
         self._exc_handlers[cls_exc] = handler
 
     def add_middleware(self, middleware: BaseMiddleware) -> None:
-        if self._app_ctx.app_started is True:
+        if self.jobber_config.app_started is True:
             raise_app_already_started_error("add_middleware")
         self._middleware.appendleft(middleware)
 
@@ -99,20 +107,7 @@ class Jobber:
     async def _entry(self, context: JobContext) -> Any:  # noqa: ANN401
         runnable: Runnable[Any] = context.runnable
         inject_context(runnable, context)
-
-        if iscoroutinerunnable(runnable):
-            return await runnable()
-
-        getloop = self._app_ctx.getloop
-        match runnable.exec_mode:
-            case ExecutionMode.THREAD:
-                threadpool = self._app_ctx.worker_pools.threadpool
-                return await getloop().run_in_executor(threadpool, runnable)
-            case ExecutionMode.PROCESS:
-                processpool = self._app_ctx.worker_pools.processpool
-                return await getloop().run_in_executor(processpool, runnable)
-            case _:
-                return runnable()
+        return await runnable()
 
     @overload
     def register(self, func: Callable[_P, _R]) -> JobRoute[_P, _R]: ...
@@ -121,10 +116,11 @@ class Jobber:
     def register(
         self,
         *,
-        job_name: str | None = None,
+        retry: int = 1,
+        timeout: float = 600,
+        func_name: str | None = None,
         exec_mode: ExecutionMode = EMPTY,
         metadata: Mapping[str, Any] | None = None,
-        timeout: float = 600,
     ) -> Callable[[Callable[_P, _R]], JobRoute[_P, _R]]: ...
 
     @overload
@@ -132,29 +128,32 @@ class Jobber:
         self,
         func: Callable[_P, _R],
         *,
-        job_name: str | None = None,
+        retry: int = 1,
+        timeout: float = 600,
+        func_name: str | None = None,
         exec_mode: ExecutionMode = EMPTY,
         metadata: Mapping[str, Any] | None = None,
-        timeout: float = 600,
     ) -> JobRoute[_P, _R]: ...
 
-    def register(
+    def register(  # noqa: PLR0913
         self,
         func: Callable[_P, _R] | None = None,
         *,
-        job_name: str | None = None,
+        retry: int = 1,
+        timeout: float = 600,  # default 10 min.
+        func_name: str | None = None,
         exec_mode: ExecutionMode = EMPTY,
         metadata: Mapping[str, Any] | None = None,
-        timeout: float = 600,  # default 10 min.
     ) -> JobRoute[_P, _R] | Callable[[Callable[_P, _R]], JobRoute[_P, _R]]:
-        if self._app_ctx.app_started is True:
+        if self.jobber_config.app_started is True:
             raise_app_already_started_error("register")
 
         wrapper = self._register(
-            job_name=job_name,
+            retry=retry,
+            timeout=timeout,
+            func_name=func_name,
             exec_mode=exec_mode,
             metadata=metadata,
-            timeout=timeout,
         )
         if callable(func):
             return wrapper(func)
@@ -163,24 +162,33 @@ class Jobber:
     def _register(
         self,
         *,
-        job_name: str | None,
+        retry: int = 1,
+        timeout: float = 600,  # default 10 min.
+        func_name: str | None,
         exec_mode: ExecutionMode,
         metadata: Mapping[str, Any] | None,
-        timeout: float,
     ) -> Callable[[Callable[_P, _R]], JobRoute[_P, _R]]:
         def wrapper(func: Callable[_P, _R]) -> JobRoute[_P, _R]:
-            fname = job_name or create_default_name(func)
+            fname = func_name or create_default_name(func)
             if route := self._routes.get(fname):
                 return cast("JobRoute[_P, _R]", route)
-            route = JobRoute(
-                state=self.state,
-                job_name=fname,
-                app_ctx=self._app_ctx,
-                original_func=func,
-                job_registry=self._job_registry,
-                exec_mode=exec_mode,
-                metadata=metadata,
+
+            is_async = asyncio.iscoroutinefunction(func)
+            mode = get_exec_mode(exec_mode, is_async=is_async)
+            config = RouteConfiguration(
+                retry=retry,
                 timeout=timeout,
+                is_async=is_async,
+                func_name=fname,
+                exec_mode=mode,
+                metadata=metadata,
+            )
+            route = JobRoute(
+                original_func=func,
+                configuration=config,
+                state=self.state,
+                jobber_configuration=self.jobber_config,
+                job_registry=self._job_registry,
             )
             _ = functools.update_wrapper(route, func)
             self._routes[fname] = route
@@ -192,8 +200,8 @@ class Jobber:
         self._middleware.append(
             ExceptionMiddleware(
                 self._exc_handlers,
-                self._app_ctx.worker_pools.threadpool,
-                self._app_ctx.getloop,
+                self.jobber_config.worker_pools.threadpool,
+                self.jobber_config.loop_factory,
             )
         )
         middleware_chain = build_middleware(self._middleware, self._entry)
@@ -203,17 +211,17 @@ class Jobber:
     async def startup(self) -> None:
         await anext(self._lifespan)
         self._build_middleware_chain()
-        self._app_ctx.app_started = True
+        self.jobber_config.app_started = True
 
     async def shutdown(self) -> None:
-        self._app_ctx.app_started = False
-        if tasks := self._app_ctx.asyncio_tasks:
+        self.jobber_config.app_started = False
+        if tasks := self.jobber_config.asyncio_tasks:
             for task in tasks:
                 _ = task.cancel()
             _ = await asyncio.gather(*tasks, return_exceptions=True)
-            self._app_ctx.asyncio_tasks.clear()
+            self.jobber_config.asyncio_tasks.clear()
 
-        self._app_ctx.close()
+        self.jobber_config.close()
         await anext(self._lifespan, None)
 
     async def __aenter__(self) -> Jobber:

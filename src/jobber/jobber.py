@@ -2,28 +2,26 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import deque
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Literal, TypeVar
 from zoneinfo import ZoneInfo
 
 from jobber._internal.jobber import Jobber as _Jobber
+from jobber._internal.serializers.json import JSONSerializer
 from jobber._internal.storage.dummy import DummyRepository
 from jobber._internal.storage.sqlite import SQLiteJobRepository
 from jobber.crontab import Crontab
-from jobber.serializers import JSONSerializer
 
 if TYPE_CHECKING:
-    import asyncio
     from collections.abc import AsyncIterator, Sequence
     from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
-    from jobber._internal.common.types import (
-        Lifespan,
-        MappingExceptionHandlers,
-    )
+    from jobber._internal.common.types import Lifespan, LoopFactory
     from jobber._internal.cron_parser import CronParser
     from jobber._internal.middleware.base import BaseMiddleware
+    from jobber._internal.middleware.exceptions import MappingExceptionHandlers
     from jobber._internal.serializers.abc import JobsSerializer
     from jobber._internal.storage.abc import JobRepository
 
@@ -48,7 +46,7 @@ class Jobber(_Jobber):
         self,
         *,
         tz: ZoneInfo | None = None,
-        loop: asyncio.AbstractEventLoop | None = None,
+        loop_factory: LoopFactory = lambda: asyncio.get_running_loop(),
         durable: JobRepository | Literal[False] | None = None,
         lifespan: Lifespan[_AppType] | None = None,
         serializer: JobsSerializer | None = None,
@@ -65,7 +63,7 @@ class Jobber(_Jobber):
             durable = SQLiteJobRepository()
         super().__init__(
             tz=tz or ZoneInfo("UTC"),
-            loop=loop,
+            loop_factory=loop_factory,
             durable=durable,
             lifespan=lifespan or _lifespan_stub,
             serializer=serializer or JSONSerializer(),
