@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, final
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast, final
 
 from jobber._internal.common.constants import EMPTY, JobStatus
 from jobber._internal.exceptions import (
@@ -21,12 +21,13 @@ Use it only with synchronous functions. \
 Async functions are already executed in the event loop.
 """
 
-_R = TypeVar("_R")
+ReturnT = TypeVar("ReturnT")
 
 
 @final
-class Job(Generic[_R]):
+class Job(Generic[ReturnT]):
     __slots__: tuple[str, ...] = (
+        "_cron_failures",
         "_event",
         "_job_registry",
         "_result",
@@ -46,17 +47,18 @@ class Job(Generic[_R]):
         job_id: str,
         exec_at: datetime,
         func_name: str,
-        job_registry: dict[str, Job[_R]],
+        job_registry: dict[str, Job[ReturnT]],
         job_status: JobStatus,
         cron_expression: str | None,
         metadata: Mapping[str, Any] | None,
     ) -> None:
-        self.id = job_id
         self._event = asyncio.Event()
         self._job_registry = job_registry
-        self._result: _R = EMPTY
-        self.exception: Exception | None = None
+        self._result: ReturnT = EMPTY
         self._timer_handler: asyncio.TimerHandle = EMPTY
+        self._cron_failures = 0
+        self.id = job_id
+        self.exception: Exception | None = None
         self.cron_expression = cron_expression
         self.exec_at = exec_at
         self.name = func_name
@@ -71,9 +73,9 @@ class Job(Generic[_R]):
             f"job_name={self.name}, job_id={self.id})"
         )
 
-    def result(self) -> _R:
+    def result(self) -> ReturnT:
         if self.status is JobStatus.SKIPPED:
-            raise JobSkippedError
+            raise cast("JobSkippedError", self.exception)
         if self.status is JobStatus.SUCCESS or self._result is not EMPTY:
             return self._result
         if self.status is JobStatus.FAILED:
@@ -83,11 +85,13 @@ class Job(Generic[_R]):
             ) from self.exception
         raise JobNotCompletedError
 
-    def set_result(self, val: _R) -> None:
+    def set_result(self, val: ReturnT, *, status: JobStatus) -> None:
         self._result = val
+        self.status = status
 
-    def set_exception(self, exc: Exception) -> None:
+    def set_exception(self, exc: Exception, *, status: JobStatus) -> None:
         self.exception = exc
+        self.status = status
 
     def update(
         self,
@@ -104,6 +108,9 @@ class Job(Generic[_R]):
     def is_done(self) -> bool:
         return self._event.is_set()
 
+    def is_cron(self) -> bool:
+        return self.cron_expression is not None
+
     async def wait(self) -> None:
         """Wait until the job is done.
 
@@ -117,3 +124,12 @@ class Job(Generic[_R]):
         self.status = JobStatus.CANCELLED
         self._timer_handler.cancel()
         self._event.set()
+
+    def register_failures(self) -> None:
+        self._cron_failures += 1
+
+    def register_success(self) -> None:
+        self._cron_failures = 0
+
+    def should_reschedule(self, max_failures: int) -> bool:
+        return self.is_cron() and self._cron_failures < max_failures

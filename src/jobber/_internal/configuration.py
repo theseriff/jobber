@@ -64,4 +64,5 @@ class RouteConfiguration:
     is_async: bool
     func_name: str
     run_mode: RunMode
+    max_cron_failures: int
     metadata: Mapping[str, Any] | None
