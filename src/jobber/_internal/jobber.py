@@ -113,7 +113,8 @@ class Jobber:
 
     @overload
     def register(
-        self, func: Callable[ParamsT, ReturnT]
+        self,
+        func: Callable[ParamsT, ReturnT],
     ) -> JobRoute[ParamsT, ReturnT]: ...
 
     @overload
@@ -122,6 +123,7 @@ class Jobber:
         *,
         retry: int = 0,
         timeout: float = 600,
+        max_cron_failures: int = 10,
         func_name: str | None = None,
         run_mode: RunMode = EMPTY,
         metadata: Mapping[str, Any] | None = None,
@@ -136,6 +138,7 @@ class Jobber:
         *,
         retry: int = 0,
         timeout: float = 600,
+        max_cron_failures: int = 10,
         func_name: str | None = None,
         run_mode: RunMode = EMPTY,
         metadata: Mapping[str, Any] | None = None,
@@ -147,6 +150,7 @@ class Jobber:
         *,
         retry: int = 0,
         timeout: float = 600,  # default 10 min.
+        max_cron_failures: int = 10,
         func_name: str | None = None,
         run_mode: RunMode = EMPTY,
         metadata: Mapping[str, Any] | None = None,
@@ -156,10 +160,17 @@ class Jobber:
     ):
         if self.jobber_config.app_started is True:
             raise_app_already_started_error("register")
+        if max_cron_failures < 1:
+            msg = (
+                "max_cron_failures must be >= 1."
+                " Use 1 for 'stop on first error'."
+            )
+            raise ValueError(msg)
 
         wrapper = self._register(
             retry=retry,
             timeout=timeout,
+            max_cron_failures=max_cron_failures,
             func_name=func_name,
             run_mode=run_mode,
             metadata=metadata,
@@ -168,11 +179,12 @@ class Jobber:
             return wrapper(func)
         return wrapper  # pragma: no cover
 
-    def _register(
+    def _register(  # noqa: PLR0913
         self,
         *,
         retry: int,
         timeout: float,
+        max_cron_failures: int,
         func_name: str | None,
         run_mode: RunMode,
         metadata: Mapping[str, Any] | None,
@@ -191,6 +203,7 @@ class Jobber:
                 is_async=is_async,
                 func_name=fname,
                 run_mode=get_run_mode(run_mode, is_async=is_async),
+                max_cron_failures=max_cron_failures,
                 metadata=metadata,
             )
             route = JobRoute(

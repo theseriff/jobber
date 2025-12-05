@@ -178,21 +178,32 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
             result = await self._middleware_chain(job_context)
         except JobTimeoutError as exc:
             job.set_exception(exc, status=JobStatus.TIMEOUT)
+            job.register_failures()
         except JobSkippedError as exc:
             logger.debug("Job %s execution was skipped by middleware", job.id)
             job.set_exception(exc, status=JobStatus.SKIPPED)
         except Exception as exc:
             logger.exception("Job %s failed with unexpected error", job.id)
             job.set_exception(exc, status=JobStatus.FAILED)
+            job.register_failures()
             raise
         else:
-            job.set_result(result)
-            job.status = JobStatus.SUCCESS
+            job.set_result(result, status=JobStatus.SUCCESS)
+            job.register_success()
         finally:
             event = job._event
-            if ctx.cron_parser and self._jobber_config.app_started:
+            app_started = self._jobber_config.app_started
+            max_failures = self._route_config.max_cron_failures
+            if job.should_reschedule(max_failures) and app_started:
                 await self._reschedule_cron(ctx)
             else:
+                if job.is_cron():
+                    logger.warning(
+                        "Job %s stopped due to max failures policy (%s/%s)",
+                        job.id,
+                        job._cron_failures,
+                        max_failures,
+                    )
                 _ = self._job_registry.pop(job.id, None)
             event.set()
 

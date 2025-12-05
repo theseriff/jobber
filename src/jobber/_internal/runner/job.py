@@ -27,6 +27,7 @@ ReturnT = TypeVar("ReturnT")
 @final
 class Job(Generic[ReturnT]):
     __slots__: tuple[str, ...] = (
+        "_cron_failures",
         "_event",
         "_job_registry",
         "_result",
@@ -51,12 +52,13 @@ class Job(Generic[ReturnT]):
         cron_expression: str | None,
         metadata: Mapping[str, Any] | None,
     ) -> None:
-        self.id = job_id
         self._event = asyncio.Event()
         self._job_registry = job_registry
         self._result: ReturnT = EMPTY
-        self.exception: Exception | None = None
         self._timer_handler: asyncio.TimerHandle = EMPTY
+        self._cron_failures = 0
+        self.id = job_id
+        self.exception: Exception | None = None
         self.cron_expression = cron_expression
         self.exec_at = exec_at
         self.name = func_name
@@ -83,8 +85,9 @@ class Job(Generic[ReturnT]):
             ) from self.exception
         raise JobNotCompletedError
 
-    def set_result(self, val: ReturnT) -> None:
+    def set_result(self, val: ReturnT, *, status: JobStatus) -> None:
         self._result = val
+        self.status = status
 
     def set_exception(self, exc: Exception, *, status: JobStatus) -> None:
         self.exception = exc
@@ -105,6 +108,9 @@ class Job(Generic[ReturnT]):
     def is_done(self) -> bool:
         return self._event.is_set()
 
+    def is_cron(self) -> bool:
+        return self.cron_expression is not None
+
     async def wait(self) -> None:
         """Wait until the job is done.
 
@@ -118,3 +124,12 @@ class Job(Generic[ReturnT]):
         self.status = JobStatus.CANCELLED
         self._timer_handler.cancel()
         self._event.set()
+
+    def register_failures(self) -> None:
+        self._cron_failures += 1
+
+    def register_success(self) -> None:
+        self._cron_failures = 0
+
+    def should_reschedule(self, max_failures: int) -> bool:
+        return self.is_cron() and self._cron_failures < max_failures
