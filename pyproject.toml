@@ -8,7 +8,7 @@ module-root = "src"
 [project]
 name = "jobber"
 version = "0.1.0"
-description = "A modern, lightweight and robust task manager with a user-friendly interface and a wide range of features, using the low-level asyncio API and more."
+description = "A modern, lightweight and robust task manager with a user-friendly interface, using the low-level asyncio API and more."
 requires-python = ">=3.10"
 readme = "README.md"
 license = { text = "MIT" }
@@ -90,7 +90,7 @@ dev = [
 Homepage = "https://github.com/Maclovi/jobber"
 Repository = "https://github.com/Maclovi/jobber"
 Documentation = "https://github.com/Maclovi/jobber/README.md"
-Changelog = "https://github.com/Maclovi/jobber/blob/main/docs/src/CHANGELOG.md"
+Changelog = "https://github.com/Maclovi/jobber/blob/main/docs/CHANGELOG.md"
 Issues = "https://github.com/Maclovi/jobber/issues"
 
 # Tests

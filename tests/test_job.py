@@ -13,13 +13,14 @@ async def test_job() -> None:
     async with jobber:
         job1 = await t.schedule(1).delay(0)
         job2 = await t.schedule(1).delay(1)
-        assert str(job1).startswith(f"Job(instance_id={id(job1)}")
-        assert str(job2).startswith(f"Job(instance_id={id(job2)}")
+        await job2.cancel()
+        await job1.wait()
 
-    await job1.wait()
-    await job2.cancel()
-
+    expected_return = 2
+    assert job1.result() == expected_return
+    assert str(job1).startswith(f"Job(instance_id={id(job1)}")
+    assert str(job2).startswith(f"Job(instance_id={id(job2)}")
     assert job2.is_done()
     assert job2.status is JobStatus.CANCELLED
-    assert job2.id not in job2._job_registry
+    assert job2.id not in job2._jobs_registry
     assert job2._timer_handler.cancelled()

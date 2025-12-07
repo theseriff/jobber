@@ -1,3 +1,5 @@
+# ruff: noqa: SLF001
+# pyright: reportPrivateUsage=false
 from __future__ import annotations
 
 import asyncio
@@ -38,7 +40,6 @@ if TYPE_CHECKING:
     from jobber._internal.context import JobContext
     from jobber._internal.cron_parser import CronParser
     from jobber._internal.middleware.base import BaseMiddleware
-    from jobber._internal.runner.job import Job
     from jobber._internal.runner.runners import Runnable
     from jobber._internal.serializers.abc import JobsSerializer
     from jobber._internal.storage.abc import JobRepository
@@ -66,7 +67,6 @@ class Jobber:
     ) -> None:
         self.jobber_config: JobberConfiguration = JobberConfiguration(
             loop_factory=loop_factory,
-            asyncio_tasks=set(),
             tz=tz,
             durable=durable,
             worker_pools=WorkerPools(
@@ -75,10 +75,11 @@ class Jobber:
             ),
             serializer=serializer,
             cron_parser_cls=cron_parser_cls,
+            _tasks_registry=set(),
+            _jobs_registry={},
         )
         self._lifespan: AsyncIterator[None] = self._run_lifespan(lifespan)
         self._routes: dict[str, JobRoute[..., Any]] = {}
-        self._job_registry: dict[str, Job[Any]] = {}
         self._middleware: deque[BaseMiddleware] = middleware
         self._exc_handlers: ExceptionHandlers = exception_handlers
         self.state: State = State()
@@ -124,8 +125,9 @@ class Jobber:
         retry: int = 0,
         timeout: float = 600,
         max_cron_failures: int = 10,
-        func_name: str | None = None,
         run_mode: RunMode = EMPTY,
+        func_name: str | None = None,
+        cron: str | None = None,
         metadata: Mapping[str, Any] | None = None,
     ) -> Callable[
         [Callable[ParamsT, ReturnT]], JobRoute[ParamsT, ReturnT]
@@ -139,8 +141,9 @@ class Jobber:
         retry: int = 0,
         timeout: float = 600,
         max_cron_failures: int = 10,
-        func_name: str | None = None,
         run_mode: RunMode = EMPTY,
+        func_name: str | None = None,
+        cron: str | None = None,
         metadata: Mapping[str, Any] | None = None,
     ) -> JobRoute[ParamsT, ReturnT]: ...
 
@@ -151,8 +154,9 @@ class Jobber:
         retry: int = 0,
         timeout: float = 600,  # default 10 min.
         max_cron_failures: int = 10,
-        func_name: str | None = None,
         run_mode: RunMode = EMPTY,
+        func_name: str | None = None,
+        cron: str | None = None,
         metadata: Mapping[str, Any] | None = None,
     ) -> (
         JobRoute[ParamsT, ReturnT]
@@ -171,8 +175,9 @@ class Jobber:
             retry=retry,
             timeout=timeout,
             max_cron_failures=max_cron_failures,
-            func_name=func_name,
             run_mode=run_mode,
+            func_name=func_name,
+            cron=cron,
             metadata=metadata,
         )
         if callable(func):
@@ -185,8 +190,9 @@ class Jobber:
         retry: int,
         timeout: float,
         max_cron_failures: int,
-        func_name: str | None,
         run_mode: RunMode,
+        func_name: str | None,
+        cron: str | None,
         metadata: Mapping[str, Any] | None,
     ) -> Callable[[Callable[ParamsT, ReturnT]], JobRoute[ParamsT, ReturnT]]:
         def wrapper(
@@ -200,21 +206,24 @@ class Jobber:
             route_config = RouteConfiguration(
                 retry=retry,
                 timeout=timeout,
+                max_cron_failures=max_cron_failures,
+                run_mode=get_run_mode(run_mode, is_async=is_async),
                 is_async=is_async,
                 func_name=fname,
-                run_mode=get_run_mode(run_mode, is_async=is_async),
-                max_cron_failures=max_cron_failures,
+                cron=cron,
                 metadata=metadata,
             )
-            route = JobRoute(
+            route = JobRoute[ParamsT, ReturnT](
                 state=self.state,
                 original_func=func,
                 route_config=route_config,
                 jobber_config=self.jobber_config,
-                job_registry=self._job_registry,
             )
             _ = functools.update_wrapper(route, func)
             self._routes[fname] = route
+            if cron:
+                p = (route, cron)
+                self.state.setdefault("__pending_cron_jobs__", []).append(p)
             return route
 
         return wrapper
@@ -228,20 +237,24 @@ class Jobber:
         self._middleware.extend(system_middlewares)
         middleware_chain = build_middleware(self._middleware, self._entry)
         for route in self._routes.values():
-            route._middleware_chain = middleware_chain  # noqa: SLF001 # pyright: ignore[reportPrivateUsage]
+            route._middleware_chain = middleware_chain
 
     async def startup(self) -> None:
         await anext(self._lifespan)
         self._build_middleware_chain()
         self.jobber_config.app_started = True
 
+        if crons := self.state.pop("__pending_cron_jobs__", []):
+            pending = (route.schedule().cron(cron) for route, cron in crons)
+            _ = await asyncio.gather(*pending)
+
     async def shutdown(self) -> None:
         self.jobber_config.app_started = False
-        if tasks := self.jobber_config.asyncio_tasks:
+        if tasks := self.jobber_config._tasks_registry:
             for task in tasks:
                 _ = task.cancel()
             _ = await asyncio.gather(*tasks, return_exceptions=True)
-            self.jobber_config.asyncio_tasks.clear()
+            self.jobber_config._tasks_registry.clear()
 
         self.jobber_config.close()
         await anext(self._lifespan, None)

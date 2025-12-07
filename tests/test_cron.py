@@ -61,6 +61,21 @@ async def test_max_cron_failures(
         expression = "* * * * * * *"  # every seconds
         job = await f.schedule().cron(expression)
         await job.wait()
+        await job.wait()
 
     amock.assert_awaited_once()
     assert not job.should_reschedule(max_failures)
+
+
+async def test_cron_declarative(cron_parser_cls: type[CronParser]) -> None:
+    jobber = Jobber(cron_parser_cls=cron_parser_cls)
+
+    @jobber.register(cron="* * * * * * *")
+    async def _() -> str:
+        return "ok"
+
+    async with jobber:
+        job = jobber.jobber_config._jobs_registry.popitem()[1]  # pyright: ignore[reportPrivateUsage]
+        await job.wait()
+
+    assert job.result() == "ok"

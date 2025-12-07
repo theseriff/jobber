@@ -29,7 +29,7 @@ class Job(Generic[ReturnT]):
     __slots__: tuple[str, ...] = (
         "_cron_failures",
         "_event",
-        "_job_registry",
+        "_jobs_registry",
         "_result",
         "_timer_handler",
         "cron_expression",
@@ -53,10 +53,10 @@ class Job(Generic[ReturnT]):
         metadata: Mapping[str, Any] | None,
     ) -> None:
         self._event = asyncio.Event()
-        self._job_registry = job_registry
+        self._jobs_registry = job_registry
+        self._cron_failures = 0
         self._result: ReturnT = EMPTY
         self._timer_handler: asyncio.TimerHandle = EMPTY
-        self._cron_failures = 0
         self.id = job_id
         self.exception: Exception | None = None
         self.cron_expression = cron_expression
@@ -120,7 +120,7 @@ class Job(Generic[ReturnT]):
         _ = await self._event.wait()
 
     async def cancel(self) -> None:
-        _me = self._job_registry.pop(self.id, None)
+        _ = self._jobs_registry.pop(self.id, None)
         self.status = JobStatus.CANCELLED
         self._timer_handler.cancel()
         self._event.set()
@@ -132,4 +132,4 @@ class Job(Generic[ReturnT]):
         self._cron_failures = 0
 
     def should_reschedule(self, max_failures: int) -> bool:
-        return self.is_cron() and self._cron_failures < max_failures
+        return self._cron_failures < max_failures

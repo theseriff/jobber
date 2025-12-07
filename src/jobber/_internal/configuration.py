@@ -4,7 +4,7 @@ import multiprocessing
 import sys
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ParamSpec
 
 if TYPE_CHECKING:
     import asyncio
@@ -14,8 +14,12 @@ if TYPE_CHECKING:
     from jobber._internal.common.constants import RunMode
     from jobber._internal.common.types import LoopFactory
     from jobber._internal.cron_parser import CronParser
+    from jobber._internal.runner.job import Job
     from jobber._internal.serializers.abc import JobsSerializer
     from jobber._internal.storage.abc import JobRepository
+
+
+ParamsT = ParamSpec("ParamsT")
 
 
 @dataclass(slots=True, kw_only=True)
@@ -51,10 +55,16 @@ class JobberConfiguration:
     serializer: JobsSerializer
     cron_parser_cls: type[CronParser]
     app_started: bool = False
-    asyncio_tasks: set[asyncio.Task[Any]]
+    _jobs_registry: dict[str, Job[Any]]
+    _tasks_registry: set[asyncio.Task[Any]]
 
     def close(self) -> None:
         self.worker_pools.close()
+
+
+@dataclass(slots=True, kw_only=True, frozen=True)
+class CronSpec:
+    expression: str
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
@@ -65,4 +75,5 @@ class RouteConfiguration:
     func_name: str
     run_mode: RunMode
     max_cron_failures: int
+    cron: str | None
     metadata: Mapping[str, Any] | None

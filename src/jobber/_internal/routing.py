@@ -28,7 +28,6 @@ if TYPE_CHECKING:
         RouteConfiguration,
     )
     from jobber._internal.middleware.base import CallNext
-    from jobber._internal.runner.job import Job
 
 
 T = TypeVar("T")
@@ -55,7 +54,6 @@ class JobRoute(Generic[ParamsT, ReturnT]):
         jobber_config: JobberConfiguration,
         route_config: RouteConfiguration,
         original_func: Callable[ParamsT, ReturnT],
-        job_registry: dict[str, Job[ReturnT]],
     ) -> None:
         self._strategy_run = create_run_strategy(
             original_func,
@@ -63,7 +61,6 @@ class JobRoute(Generic[ParamsT, ReturnT]):
             jobber_config,
         )
         self._jobber_config = jobber_config
-        self._job_registry = job_registry
         self._original_func = original_func
         self._middleware_chain: CallNext = EMPTY
         self.route_config = route_config
@@ -149,7 +146,6 @@ class JobRoute(Generic[ParamsT, ReturnT]):
             state=self.state,
             runnable=self._strategy_run.create_runnable(*args, **kwargs),
             jobber_config=self._jobber_config,
-            job_registry=self._job_registry,
             configuration=self.route_config,
             middleware_chain=self._middleware_chain,
         )

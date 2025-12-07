@@ -36,10 +36,11 @@ Jobber is a modern, asynchronous task scheduler that offers powerful features an
 
 ## Features
 
-- **Middleware Support**: Jobber offers a flexible middleware processing pipeline that allows you to add custom logic before or after a job is executed. This can be useful for things like logging, authentication, or performance monitoring. The API is similar to that of frameworks like Starlette and aiogram, providing a powerful tool for customizing job execution.
+- **Cron**: Jobber supports cron expressions with an optional seventh field for seconds (`* * * * * * *`) to schedule jobs with high precision and for high-frequency tasks.
+- **Context Dependency Injection**: Simplify your job by automatically injecting dependencies from a shared context.
 - **Lifespan Events**: Effectively manage resources with startup and shutdown events. These are useful for initializing and cleaning up resources, such as database connections, or sending a notification when the application starts or stops.
+- **Middleware Support**: Jobber offers a flexible middleware processing pipeline that allows you to add custom logic before or after a job is executed. This can be useful for things like logging, authentication, or performance monitoring. The API is similar to that of frameworks like Starlette and aiogram, providing a powerful tool for customizing job execution.
 - **Flexible Exception Handling**: Avoid application crashes due to a single failed job. Create custom exception handlers for various error types, enabling more detailed and flexible error handling strategies. You can record the error, try the task again, or notify the developers.
-- **Customizable serialization**: Jobs can be saved in various formats. The default format is JSON, but you can easily add your own custom serialization method to handle complex data types or integrate with other systems.
 - **Full-Time Zone Support**: Let's make time zones less of a headache. We can schedule jobs reliably for users in different regions, considering their local time zones. With Jobber, it's easy to schedule jobs in any time zone and convert between them.
 
 ---
