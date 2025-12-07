@@ -44,7 +44,6 @@ class ScheduleContext(Generic[ReturnT]):
 @final
 class ScheduleBuilder(ABC, Generic[ReturnT]):
     __slots__: tuple[str, ...] = (
-        "_job_registry",
         "_jobber_config",
         "_middleware_chain",
         "_route_config",
@@ -52,20 +51,18 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
         "_state",
     )
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         *,
         state: State,
         jobber_config: JobberConfiguration,
         runnable: Runnable[ReturnT],
-        job_registry: dict[str, Job[ReturnT]],
         middleware_chain: CallNext,
         configuration: RouteConfiguration,
     ) -> None:
         self._state = state
         self._jobber_config = jobber_config
         self._runnable = runnable
-        self._job_registry = job_registry
         self._route_config = configuration
         self._middleware_chain = middleware_chain
 
@@ -133,7 +130,7 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
             exec_at=at,
             job_id=job_id,
             func_name=self._route_config.func_name,
-            job_registry=self._job_registry,
+            job_registry=self._jobber_config._jobs_registry,
             job_status=JobStatus.SCHEDULED,
             cron_expression=cron_exp,
             metadata=self._route_config.metadata,
@@ -143,7 +140,7 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
         when = loop.time() + delay_seconds
         time_handler = loop.call_at(when, self._pre_exec_job, ctx)
         job._timer_handler = time_handler
-        self._job_registry[job_id] = job
+        self._jobber_config._jobs_registry[job.id] = job
         return job
 
     def _calculate_delay_seconds(
@@ -160,8 +157,8 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
 
     def _pre_exec_job(self, ctx: ScheduleContext[ReturnT]) -> None:
         task = asyncio.create_task(self._exec_job(ctx=ctx), name=ctx.job.id)
-        task.add_done_callback(self._jobber_config.asyncio_tasks.discard)
-        self._jobber_config.asyncio_tasks.add(task)
+        self._jobber_config._tasks_registry.add(task)
+        task.add_done_callback(self._jobber_config._tasks_registry.discard)
 
     async def _exec_job(self, *, ctx: ScheduleContext[ReturnT]) -> None:
         job = ctx.job
@@ -191,21 +188,19 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
             job.set_result(result, status=JobStatus.SUCCESS)
             job.register_success()
         finally:
-            event = job._event
-            app_started = self._jobber_config.app_started
-            max_failures = self._route_config.max_cron_failures
-            if job.should_reschedule(max_failures) and app_started:
-                await self._reschedule_cron(ctx)
-            else:
-                if job.is_cron():
+            job._event.set()
+            _ = self._jobber_config._jobs_registry.pop(job.id, None)
+            if job.is_cron() and self._jobber_config.app_started:
+                max_failures = self._route_config.max_cron_failures
+                if job.should_reschedule(max_failures):
+                    await self._reschedule_cron(ctx)
+                else:
                     logger.warning(
                         "Job %s stopped due to max failures policy (%s/%s)",
                         job.id,
                         job._cron_failures,
                         max_failures,
                     )
-                _ = self._job_registry.pop(job.id, None)
-            event.set()
 
     async def _reschedule_cron(
         self,
@@ -224,3 +219,4 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
             time_handler=time_handler,
             job_status=JobStatus.SCHEDULED,
         )
+        self._jobber_config._jobs_registry[job.id] = job

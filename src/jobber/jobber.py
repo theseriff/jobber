@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from jobber._internal.storage.abc import JobRepository
 
 
-_AppType = TypeVar("_AppType", bound="Jobber")
+AppT = TypeVar("AppT", bound="Jobber")
 
 
 @asynccontextmanager
@@ -48,7 +48,7 @@ class Jobber(_Jobber):
         tz: ZoneInfo | None = None,
         loop_factory: LoopFactory = lambda: asyncio.get_running_loop(),
         durable: JobRepository | Literal[False] | None = None,
-        lifespan: Lifespan[_AppType] | None = None,
+        lifespan: Lifespan[AppT] | None = None,
         serializer: JobsSerializer | None = None,
         middleware: Sequence[BaseMiddleware] | None = None,
         exception_handlers: MappingExceptionHandlers | None = None,
