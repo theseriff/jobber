@@ -4,7 +4,7 @@ import multiprocessing
 import sys
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 if TYPE_CHECKING:
     import asyncio
@@ -59,12 +59,10 @@ class JobberConfiguration:
         self.worker_pools.close()
 
 
-@dataclass(slots=True, kw_only=True, frozen=True)
-class RouteConfiguration:
+class RouteOptions(NamedTuple):
     retry: int
     timeout: float
-    is_async: bool
-    func_name: str
+    func_name: str | None
     run_mode: RunMode
     max_cron_failures: int
     cron: str | None

@@ -79,7 +79,7 @@ async def test_injection_wrong_usage() -> None:
 async def test_inject_context_skips_non_inject_parameters(
     amock: AsyncMock,
 ) -> None:
-    strategy = create_run_strategy(amock, Mock(), Mock())
+    strategy = create_run_strategy(amock, Mock(), mode=Mock())
     runnable = strategy.create_runnable(normal_param="test")
     inject_context(runnable, Mock(spec=JobContext))
     result = await runnable()

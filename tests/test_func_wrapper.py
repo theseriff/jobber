@@ -4,7 +4,7 @@ from collections.abc import Callable
 import pytest
 
 from jobber import Jobber
-from jobber._internal.routing import create_default_name
+from jobber._internal.registrator import create_default_name
 
 
 def somefunc() -> None:
@@ -59,10 +59,10 @@ def test_patch_job_name() -> None:
     new_name = "t__jobber_original"
     new_qualname = f"test_patch_job_name.<locals>.{new_name}"
 
-    assert t._original_func.__name__ == new_name
-    assert t1_reg._original_func.__name__ == new_name
-    assert t2_reg._original_func.__name__ == new_name
-    assert t._original_func.__qualname__ == new_qualname
-    assert t1_reg._original_func.__qualname__ == new_qualname
-    assert t2_reg._original_func.__qualname__ == new_qualname
+    assert t.original_func.__name__ == new_name
+    assert t1_reg.original_func.__name__ == new_name
+    assert t2_reg.original_func.__name__ == new_name
+    assert t.original_func.__qualname__ == new_qualname
+    assert t1_reg.original_func.__qualname__ == new_qualname
+    assert t2_reg.original_func.__qualname__ == new_qualname
     assert t1_reg is t2_reg is t

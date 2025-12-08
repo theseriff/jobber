@@ -3,20 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import functools
-from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
-from jobber._internal.common.constants import (
-    EMPTY,
-    RunMode,
-    get_run_mode,
-)
 from jobber._internal.common.datastructures import State
-from jobber._internal.configuration import (
-    JobberConfiguration,
-    RouteConfiguration,
-    WorkerPools,
-)
+from jobber._internal.configuration import JobberConfiguration, WorkerPools
 from jobber._internal.exceptions import raise_app_already_started_error
 from jobber._internal.injection import inject_context
 from jobber._internal.middleware.base import build_middleware
@@ -27,11 +17,11 @@ from jobber._internal.middleware.exceptions import (
 )
 from jobber._internal.middleware.retry import RetryMiddleware
 from jobber._internal.middleware.timeout import TimeoutMiddleware
-from jobber._internal.routing import JobRoute, create_default_name
+from jobber._internal.registrator import JobRegistrator
 
 if TYPE_CHECKING:
     from collections import deque
-    from collections.abc import AsyncIterator, Callable, Mapping
+    from collections.abc import AsyncIterator, Callable
     from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
     from types import TracebackType
     from zoneinfo import ZoneInfo
@@ -79,10 +69,13 @@ class Jobber:
             _jobs_registry={},
         )
         self._lifespan: AsyncIterator[None] = self._run_lifespan(lifespan)
-        self._routes: dict[str, JobRoute[..., Any]] = {}
         self._middleware: deque[BaseMiddleware] = middleware
         self._exc_handlers: ExceptionHandlers = exception_handlers
         self.state: State = State()
+        self.register: JobRegistrator = JobRegistrator(
+            self.jobber_config,
+            self.state,
+        )
 
     def add_exception_handler(
         self,
@@ -112,122 +105,6 @@ class Jobber:
         inject_context(runnable, context)
         return await runnable()
 
-    @overload
-    def register(
-        self,
-        func: Callable[ParamsT, ReturnT],
-    ) -> JobRoute[ParamsT, ReturnT]: ...
-
-    @overload
-    def register(
-        self,
-        *,
-        retry: int = 0,
-        timeout: float = 600,
-        max_cron_failures: int = 10,
-        run_mode: RunMode = EMPTY,
-        func_name: str | None = None,
-        cron: str | None = None,
-        metadata: Mapping[str, Any] | None = None,
-    ) -> Callable[
-        [Callable[ParamsT, ReturnT]], JobRoute[ParamsT, ReturnT]
-    ]: ...
-
-    @overload
-    def register(
-        self,
-        func: Callable[ParamsT, ReturnT],
-        *,
-        retry: int = 0,
-        timeout: float = 600,
-        max_cron_failures: int = 10,
-        run_mode: RunMode = EMPTY,
-        func_name: str | None = None,
-        cron: str | None = None,
-        metadata: Mapping[str, Any] | None = None,
-    ) -> JobRoute[ParamsT, ReturnT]: ...
-
-    def register(  # noqa: PLR0913
-        self,
-        func: Callable[ParamsT, ReturnT] | None = None,
-        *,
-        retry: int = 0,
-        timeout: float = 600,  # default 10 min.
-        max_cron_failures: int = 10,
-        run_mode: RunMode = EMPTY,
-        func_name: str | None = None,
-        cron: str | None = None,
-        metadata: Mapping[str, Any] | None = None,
-    ) -> (
-        JobRoute[ParamsT, ReturnT]
-        | Callable[[Callable[ParamsT, ReturnT]], JobRoute[ParamsT, ReturnT]]
-    ):
-        if self.jobber_config.app_started is True:
-            raise_app_already_started_error("register")
-        if max_cron_failures < 1:
-            msg = (
-                "max_cron_failures must be >= 1."
-                " Use 1 for 'stop on first error'."
-            )
-            raise ValueError(msg)
-
-        wrapper = self._register(
-            retry=retry,
-            timeout=timeout,
-            max_cron_failures=max_cron_failures,
-            run_mode=run_mode,
-            func_name=func_name,
-            cron=cron,
-            metadata=metadata,
-        )
-        if callable(func):
-            return wrapper(func)
-        return wrapper  # pragma: no cover
-
-    def _register(  # noqa: PLR0913
-        self,
-        *,
-        retry: int,
-        timeout: float,
-        max_cron_failures: int,
-        run_mode: RunMode,
-        func_name: str | None,
-        cron: str | None,
-        metadata: Mapping[str, Any] | None,
-    ) -> Callable[[Callable[ParamsT, ReturnT]], JobRoute[ParamsT, ReturnT]]:
-        def wrapper(
-            func: Callable[ParamsT, ReturnT],
-        ) -> JobRoute[ParamsT, ReturnT]:
-            fname = func_name or create_default_name(func)
-            if route := self._routes.get(fname):
-                return cast("JobRoute[ParamsT, ReturnT]", route)
-
-            is_async = asyncio.iscoroutinefunction(func)
-            route_config = RouteConfiguration(
-                retry=retry,
-                timeout=timeout,
-                max_cron_failures=max_cron_failures,
-                run_mode=get_run_mode(run_mode, is_async=is_async),
-                is_async=is_async,
-                func_name=fname,
-                cron=cron,
-                metadata=metadata,
-            )
-            route = JobRoute[ParamsT, ReturnT](
-                state=self.state,
-                original_func=func,
-                route_config=route_config,
-                jobber_config=self.jobber_config,
-            )
-            _ = functools.update_wrapper(route, func)
-            self._routes[fname] = route
-            if cron:
-                p = (route, cron)
-                self.state.setdefault("__pending_cron_jobs__", []).append(p)
-            return route
-
-        return wrapper
-
     def _build_middleware_chain(self) -> None:
         system_middlewares = (
             TimeoutMiddleware(),
@@ -236,7 +113,7 @@ class Jobber:
         )
         self._middleware.extend(system_middlewares)
         middleware_chain = build_middleware(self._middleware, self._entry)
-        for route in self._routes.values():
+        for route in self.register._routes.values():
             route._middleware_chain = middleware_chain
 
     async def startup(self) -> None:

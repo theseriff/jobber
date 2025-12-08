@@ -23,7 +23,7 @@ from jobber._internal.runner.job import Job
 if TYPE_CHECKING:
     from jobber._internal.configuration import (
         JobberConfiguration,
-        RouteConfiguration,
+        RouteOptions,
     )
     from jobber._internal.cron_parser import CronParser
     from jobber._internal.middleware.base import CallNext
@@ -46,25 +46,28 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
     __slots__: tuple[str, ...] = (
         "_jobber_config",
         "_middleware_chain",
-        "_route_config",
         "_runnable",
         "_state",
+        "func_name",
+        "route_options",
     )
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         state: State,
         jobber_config: JobberConfiguration,
         runnable: Runnable[ReturnT],
         middleware_chain: CallNext,
-        configuration: RouteConfiguration,
+        options: RouteOptions,
+        func_name: str,
     ) -> None:
         self._state = state
         self._jobber_config = jobber_config
         self._runnable = runnable
-        self._route_config = configuration
         self._middleware_chain = middleware_chain
+        self.func_name = func_name
+        self.route_options = options
 
     async def cron(
         self,
@@ -129,7 +132,7 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
         job = Job(
             exec_at=at,
             job_id=job_id,
-            func_name=self._route_config.func_name,
+            func_name=self.func_name,
             job_registry=self._jobber_config._jobs_registry,
             job_status=JobStatus.SCHEDULED,
             cron_expression=cron_exp,
@@ -167,7 +170,7 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
             state=self._state,
             request_state=RequestState(),
             runnable=self._runnable,
-            route_config=self._route_config,
+            route_config=self.route_options,
             jobber_config=self._jobber_config,
         )
         try:
@@ -190,7 +193,7 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
             job._event.set()
             _ = self._jobber_config._jobs_registry.pop(job.id, None)
             if job.is_cron() and self._jobber_config.app_started:
-                max_failures = self._route_config.max_cron_failures
+                max_failures = self.route_options.max_cron_failures
                 if job.should_reschedule(max_failures):
                     await self._reschedule_cron(ctx)
                 else:
