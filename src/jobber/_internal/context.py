@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeAlias
 
 from jobber._internal.common.datastructures import RequestState, State
 from jobber._internal.configuration import (
@@ -8,6 +9,8 @@ from jobber._internal.configuration import (
 )
 from jobber._internal.runner.job import Job
 from jobber._internal.runner.runners import Runnable
+
+JobberApp: TypeAlias = Callable[["JobContext"], Any]
 
 
 @dataclass(slots=True, kw_only=True)

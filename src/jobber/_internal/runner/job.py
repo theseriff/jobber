@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast, final
+from typing import TYPE_CHECKING, Generic, TypeVar, cast, final
 
 from jobber._internal.common.constants import EMPTY, JobStatus
 from jobber._internal.exceptions import (
@@ -12,7 +12,6 @@ from jobber._internal.exceptions import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
     from datetime import datetime
 
 ASYNC_FUNC_IGNORED_WARNING = """\
@@ -36,7 +35,6 @@ class Job(Generic[ReturnT]):
         "exception",
         "exec_at",
         "id",
-        "metadata",
         "name",
         "status",
     )
@@ -50,7 +48,6 @@ class Job(Generic[ReturnT]):
         job_registry: dict[str, Job[ReturnT]],
         job_status: JobStatus,
         cron_expression: str | None,
-        metadata: Mapping[str, Any] | None,
     ) -> None:
         self._event = asyncio.Event()
         self._jobs_registry = job_registry
@@ -63,7 +60,6 @@ class Job(Generic[ReturnT]):
         self.exec_at = exec_at
         self.name = func_name
         self.status = job_status
-        self.metadata = metadata
 
     def __repr__(self) -> str:
         return (

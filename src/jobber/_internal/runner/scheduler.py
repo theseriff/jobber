@@ -133,7 +133,6 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
             job_registry=self._jobber_config._jobs_registry,
             job_status=JobStatus.SCHEDULED,
             cron_expression=cron_exp,
-            metadata=self._route_config.metadata,
         )
         ctx = ScheduleContext(job=job, cron_parser=cron_parser)
         loop = self._jobber_config.loop_factory()

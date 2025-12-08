@@ -4,7 +4,7 @@ import multiprocessing
 import sys
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ParamSpec
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import asyncio
@@ -17,9 +17,6 @@ if TYPE_CHECKING:
     from jobber._internal.runner.job import Job
     from jobber._internal.serializers.abc import JobsSerializer
     from jobber._internal.storage.abc import JobRepository
-
-
-ParamsT = ParamSpec("ParamsT")
 
 
 @dataclass(slots=True, kw_only=True)
@@ -60,11 +57,6 @@ class JobberConfiguration:
 
     def close(self) -> None:
         self.worker_pools.close()
-
-
-@dataclass(slots=True, kw_only=True, frozen=True)
-class CronSpec:
-    expression: str
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
