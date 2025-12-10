@@ -29,7 +29,7 @@ async def test_cron_reschedule(
 ) -> None:
     jobber = Jobber(cron_parser_cls=cron_parser_cls)
 
-    @jobber.register
+    @jobber.task
     def t(name: str) -> str:
         return f"hello, {name}!"
 
@@ -53,10 +53,10 @@ async def test_max_cron_failures(
     jobber = Jobber(cron_parser_cls=cron_parser_cls)
     match = "max_cron_failures must be >= 1. Use 1 for 'stop on first error'."
     with pytest.raises(ValueError, match=match):
-        _ = jobber.register(amock, max_cron_failures=0)
+        _ = jobber.task(amock, max_cron_failures=0)
 
     max_failures = 1
-    f = jobber.register(amock, max_cron_failures=max_failures)
+    f = jobber.task(amock, max_cron_failures=max_failures)
     async with jobber:
         expression = "* * * * * * *"  # every seconds
         job = await f.schedule().cron(expression)
@@ -70,7 +70,7 @@ async def test_max_cron_failures(
 async def test_cron_declarative(cron_parser_cls: type[CronParser]) -> None:
     jobber = Jobber(cron_parser_cls=cron_parser_cls)
 
-    @jobber.register(cron="* * * * * * *")
+    @jobber.task(cron="* * * * * * *")
     async def _() -> str:
         return "ok"
 

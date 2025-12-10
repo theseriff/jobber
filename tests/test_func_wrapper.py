@@ -4,7 +4,7 @@ from collections.abc import Callable
 import pytest
 
 from jobber import Jobber
-from jobber._internal.registrator import create_default_name
+from jobber._internal.routers.root import create_default_name
 
 
 def somefunc() -> None:
@@ -32,11 +32,11 @@ def test_create_default_name(func: Callable[..., None]) -> None:
 async def test_original_func_call() -> None:
     jobber = Jobber()
 
-    @jobber.register
+    @jobber.task
     def t1(num: int) -> int:
         return num + 1
 
-    @jobber.register
+    @jobber.task
     async def t2(num: int) -> int:
         return num + 1
 
@@ -48,13 +48,13 @@ async def test_original_func_call() -> None:
 def test_patch_job_name() -> None:
     jobber = Jobber()
 
-    @jobber.register
-    @jobber.register
+    @jobber.task
+    @jobber.task
     def t() -> None:
         pass
 
-    t1_reg = jobber.register(t)
-    t2_reg = jobber.register(t)
+    t1_reg = jobber.task(t)
+    t2_reg = jobber.task(t)
 
     new_name = "t__jobber_original"
     new_qualname = f"test_patch_job_name.<locals>.{new_name}"

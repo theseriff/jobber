@@ -27,7 +27,7 @@ async def test_injection() -> None:
     state: State | None = None
     ctx: JobContext = EMPTY
 
-    @jobber.register
+    @jobber.task
     async def some_func(
         job: Job[None] = INJECT,
         request_state: RequestState = INJECT,
@@ -56,11 +56,11 @@ async def test_injection() -> None:
 async def test_injection_wrong_usage() -> None:
     jobber = Jobber()
 
-    @jobber.register
+    @jobber.task
     async def untyped_func(_job=INJECT) -> None:  # type: ignore[no-untyped-def] # pyright: ignore[reportMissingParameterType]  # noqa: ANN001
         pass
 
-    @jobber.register
+    @jobber.task
     async def not_exists_type_in_map(_job: Jobber = INJECT) -> None:
         pass
 

@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Sequence
 
     from jobber._internal.common.types import Lifespan
-    from jobber._internal.middleware.base import BaseMiddleware
+    from jobber._internal.middleware.abc import BaseMiddleware
 
 
 T = TypeVar("T")
@@ -19,7 +19,7 @@ JobRouterT = TypeVar("JobRouterT", bound="Router")
 
 
 @asynccontextmanager
-async def _lifespan_stub(_: Router) -> AsyncIterator[None]:
+async def dummy_lifespan(_: Router) -> AsyncIterator[None]:
     yield None
 
 
@@ -28,7 +28,7 @@ class Router:
         self,
         *,
         prefix: str | None = None,
-        lifespan: Lifespan[JobRouterT] = _lifespan_stub,
+        lifespan: Lifespan[JobRouterT] = dummy_lifespan,
         middleware: Sequence[BaseMiddleware] | None = None,
     ) -> None:
         self._root: Router | None = None
@@ -81,9 +81,7 @@ class Router:
             parent = parent.parent
 
         self._parent = router
-        router._sub_routers.append(self)
 
     def include_router(self, router: Router) -> None:
-        if router.parent is self:
-            return
         router.parent = self
+        self._sub_routers.append(router)

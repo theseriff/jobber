@@ -25,7 +25,7 @@ class MyMiddleware(BaseMiddleware):
 async def test_common_case(amock: mock.AsyncMock) -> None:
     jobber = Jobber()
     jobber.add_middleware(MyMiddleware())
-    f = jobber.register(amock)
+    f = jobber.task(amock)
 
     async with jobber:
         job = await f.schedule(2).delay(0)
@@ -48,11 +48,11 @@ async def test_common_case(amock: mock.AsyncMock) -> None:
 async def test_exception() -> None:
     jobber = Jobber()
 
-    @jobber.register
+    @jobber.task
     async def f1() -> None:
         raise ValueError
 
-    @jobber.register
+    @jobber.task
     async def f2() -> None:
         raise ZeroDivisionError
 
@@ -81,7 +81,7 @@ async def test_retry(
 
     retry = 3
     jobber = Jobber()
-    f = jobber.register(amock, retry=retry)
+    f = jobber.task(amock, retry=retry)
     async with jobber:
         job = await f.schedule().delay(0)
         await job.wait()

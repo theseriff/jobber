@@ -1,76 +1,47 @@
 # pyright: reportPrivateUsage=false
 from __future__ import annotations
 
+import functools
+import os
 import sys
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Generic, ParamSpec, TypeVar, overload
+import uuid
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 
 from jobber._internal.common.constants import EMPTY
-from jobber._internal.exceptions import raise_app_not_started_error
+from jobber._internal.exceptions import (
+    raise_app_already_started_error,
+    raise_app_not_started_error,
+)
+from jobber._internal.routers.abc import BaseRegistrator, BaseRoute
+from jobber._internal.runner.runners import create_run_strategy
 from jobber._internal.runner.scheduler import ScheduleBuilder
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine
-    from types import CoroutineType
+    from collections.abc import Callable
 
     from jobber._internal.common.datastructures import State
     from jobber._internal.configuration import (
         JobberConfiguration,
         RouteOptions,
     )
-    from jobber._internal.middleware.base import CallNext
+    from jobber._internal.middleware.abc import CallNext
     from jobber._internal.runner.runners import RunStrategy
 
 
-T = TypeVar("T")
 ReturnT = TypeVar("ReturnT")
 ParamsT = ParamSpec("ParamsT")
 
+PENDING_CRON_JOBS = "__pending_cron_jobs__"
 
-class BaseRoute(ABC, Generic[ParamsT, ReturnT]):
-    def __init__(
-        self,
-        options: RouteOptions,
-        func: Callable[ParamsT, ReturnT],
-    ) -> None:
-        self.options: RouteOptions = options
-        self.original_func: Callable[ParamsT, ReturnT] = func
 
-    def __call__(
-        self,
-        *args: ParamsT.args,
-        **kwargs: ParamsT.kwargs,
-    ) -> ReturnT:
-        return self.original_func(*args, **kwargs)
-
-    @overload
-    def schedule(
-        self: BaseRoute[ParamsT, CoroutineType[object, object, T]],
-        *args: ParamsT.args,
-        **kwargs: ParamsT.kwargs,
-    ) -> ScheduleBuilder[T]: ...
-
-    @overload
-    def schedule(
-        self: BaseRoute[ParamsT, Coroutine[object, object, T]],
-        *args: ParamsT.args,
-        **kwargs: ParamsT.kwargs,
-    ) -> ScheduleBuilder[T]: ...
-
-    @overload
-    def schedule(
-        self: BaseRoute[ParamsT, ReturnT],
-        *args: ParamsT.args,
-        **kwargs: ParamsT.kwargs,
-    ) -> ScheduleBuilder[ReturnT]: ...
-
-    @abstractmethod
-    def schedule(
-        self,
-        *args: ParamsT.args,
-        **kwargs: ParamsT.kwargs,
-    ) -> ScheduleBuilder[Any]:
-        raise NotImplementedError
+def create_default_name(func: Callable[ParamsT, ReturnT], /) -> str:
+    fname = func.__name__
+    fmodule = func.__module__
+    if fname == "<lambda>":
+        fname = f"lambda_{uuid.uuid4().hex}"
+    if fmodule == "__main__":
+        fmodule = sys.argv[0].removesuffix(".py").replace(os.path.sep, ".")
+    return f"{fmodule}:{fname}"
 
 
 class JobRoute(BaseRoute[ParamsT, ReturnT]):
@@ -149,28 +120,42 @@ class JobRoute(BaseRoute[ParamsT, ReturnT]):
         )
 
 
-class DeferredRoute(BaseRoute[ParamsT, ReturnT]):
+class JobRegistrator(BaseRegistrator[JobRoute[..., Any]]):
     def __init__(
         self,
-        options: RouteOptions,
-        func: Callable[ParamsT, ReturnT],
+        state: State,
+        jobber_config: JobberConfiguration,
     ) -> None:
-        super().__init__(options, func)
-        self._real_route: JobRoute[ParamsT, ReturnT] | None = None
+        super().__init__()
+        self.state: State = state
+        self.jobber_config: JobberConfiguration = jobber_config
 
-    def bind(self, route: JobRoute[ParamsT, ReturnT]) -> None:
-        self._real_route = route
-
-    def schedule(
+    def register(
         self,
-        *args: ParamsT.args,
-        **kwargs: ParamsT.kwargs,
-    ) -> ScheduleBuilder[Any]:
-        if self._real_route is None:
-            fname = self.original_func.__name__
-            msg = (
-                f"Job {fname!r} is not attached to any Jobber app."
-                " Did you forget to call app.include_router()?"
+        func: Callable[ParamsT, ReturnT],
+        options: RouteOptions,
+    ) -> JobRoute[ParamsT, ReturnT]:
+        if self.jobber_config.app_started is True:
+            raise_app_already_started_error("register")
+
+        fname = options.func_name or create_default_name(func)
+        if self._routes.get(fname) is None:
+            strategy = create_run_strategy(
+                func,
+                self.jobber_config,
+                mode=options.run_mode,
             )
-            raise RuntimeError(msg)
-        return self._real_route.schedule(*args, **kwargs)
+            route = JobRoute(
+                func=func,
+                state=self.state,
+                options=options,
+                func_name=fname,
+                strategy=strategy,
+                jobber_config=self.jobber_config,
+            )
+            _ = functools.update_wrapper(route, func)
+            self._routes[fname] = route
+            if options.cron:
+                p = (route, options.cron)
+                self.state.setdefault(PENDING_CRON_JOBS, []).append(p)
+        return cast("JobRoute[ParamsT, ReturnT]", self._routes[fname])

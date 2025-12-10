@@ -42,8 +42,8 @@ async def test_jobber(  # noqa: PLR0913
     run_mode: RunMode,
 ) -> None:
     jobber = Jobber(cron_parser_cls=cron_parser_cls)
-    f1_reg = jobber.register(f1, func_name="f1_reg", run_mode=run_mode)
-    f2_reg = jobber.register(f2, func_name="f2_reg", run_mode=run_mode)
+    f1_reg = jobber.task(f1, func_name="f1_reg", run_mode=run_mode)
+    f2_reg = jobber.task(f2, func_name="f2_reg", run_mode=run_mode)
     async with jobber:
         if method == "at":
             job_sync = await f1_reg.schedule(num).at(now, now=now)

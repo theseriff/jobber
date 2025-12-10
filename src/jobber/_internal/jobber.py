@@ -9,7 +9,7 @@ from jobber._internal.common.datastructures import State
 from jobber._internal.configuration import JobberConfiguration, WorkerPools
 from jobber._internal.exceptions import raise_app_already_started_error
 from jobber._internal.injection import inject_context
-from jobber._internal.middleware.base import build_middleware
+from jobber._internal.middleware.abc import build_middleware
 from jobber._internal.middleware.exceptions import (
     ExceptionHandler,
     ExceptionHandlers,
@@ -17,7 +17,7 @@ from jobber._internal.middleware.exceptions import (
 )
 from jobber._internal.middleware.retry import RetryMiddleware
 from jobber._internal.middleware.timeout import TimeoutMiddleware
-from jobber._internal.registrator import JobRegistrator
+from jobber._internal.routers.root import JobRegistrator
 
 if TYPE_CHECKING:
     from collections import deque
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from jobber._internal.common.types import Lifespan
     from jobber._internal.context import JobContext
     from jobber._internal.cron_parser import CronParser
-    from jobber._internal.middleware.base import BaseMiddleware
+    from jobber._internal.middleware.abc import BaseMiddleware
     from jobber._internal.runner.runners import Runnable
     from jobber._internal.serializers.abc import JobsSerializer
     from jobber._internal.storage.abc import JobRepository
@@ -55,6 +55,10 @@ class Jobber:
         processpool_executor: ProcessPoolExecutor | None,
         cron_parser_cls: type[CronParser],
     ) -> None:
+        self._lifespan: AsyncIterator[None] = self._run_lifespan(lifespan)
+        self._middleware: deque[BaseMiddleware] = middleware
+        self._exc_handlers: ExceptionHandlers = exception_handlers
+        self.state: State = State()
         self.jobber_config: JobberConfiguration = JobberConfiguration(
             loop_factory=loop_factory,
             tz=tz,
@@ -68,13 +72,9 @@ class Jobber:
             _tasks_registry=set(),
             _jobs_registry={},
         )
-        self._lifespan: AsyncIterator[None] = self._run_lifespan(lifespan)
-        self._middleware: deque[BaseMiddleware] = middleware
-        self._exc_handlers: ExceptionHandlers = exception_handlers
-        self.state: State = State()
-        self.register: JobRegistrator = JobRegistrator(
-            self.jobber_config,
+        self.task: JobRegistrator = JobRegistrator(
             self.state,
+            self.jobber_config,
         )
 
     def add_exception_handler(
@@ -113,7 +113,7 @@ class Jobber:
         )
         self._middleware.extend(system_middlewares)
         middleware_chain = build_middleware(self._middleware, self._entry)
-        for route in self.register._routes.values():
+        for route in self.task._routes.values():
             route._middleware_chain = middleware_chain
 
     async def startup(self) -> None:

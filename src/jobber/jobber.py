@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from jobber._internal.common.types import Lifespan, LoopFactory
     from jobber._internal.cron_parser import CronParser
-    from jobber._internal.middleware.base import BaseMiddleware
+    from jobber._internal.middleware.abc import BaseMiddleware
     from jobber._internal.middleware.exceptions import MappingExceptionHandlers
     from jobber._internal.serializers.abc import JobsSerializer
     from jobber._internal.storage.abc import JobRepository
