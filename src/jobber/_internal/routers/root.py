@@ -9,11 +9,7 @@ from jobber._internal.exceptions import (
     raise_app_already_started_error,
     raise_app_not_started_error,
 )
-from jobber._internal.routers.base import (
-    Registrator,
-    Route,
-    Router,
-)
+from jobber._internal.routers.base import Registrator, Route, Router
 from jobber._internal.runner.runners import create_run_strategy
 from jobber._internal.runner.scheduler import ScheduleBuilder
 
@@ -32,6 +28,7 @@ if TYPE_CHECKING:
         ExceptionHandlers,
         MappingExceptionHandlers,
     )
+    from jobber._internal.routers.node import NodeRouter
     from jobber._internal.runner.runners import RunStrategy
 
 
@@ -42,15 +39,15 @@ ParamsT = ParamSpec("ParamsT")
 PENDING_CRON_JOBS = "__pending_cron_jobs__"
 
 
-class JobRoute(Route[ParamsT, ReturnT]):
+class RootRoute(Route[ParamsT, ReturnT]):
     def __init__(  # noqa: PLR0913
         self,
         *,
         state: State,
         func: Callable[ParamsT, ReturnT],
         fname: str,
-        strategy: RunStrategy[ParamsT, ReturnT],
         options: RouteOptions,
+        strategy: RunStrategy[ParamsT, ReturnT],
         jobber_config: JobberConfiguration,
     ) -> None:
         super().__init__(func, fname, options)
@@ -117,7 +114,7 @@ class JobRoute(Route[ParamsT, ReturnT]):
         )
 
 
-class JobRegistrator(Registrator[JobRoute[..., Any]]):
+class RootRegistrator(Registrator[RootRoute[..., Any]]):
     def __init__(
         self,
         state: State,
@@ -127,8 +124,8 @@ class JobRegistrator(Registrator[JobRoute[..., Any]]):
         exception_handlers: MappingExceptionHandlers | None,
     ) -> None:
         super().__init__(lifespan, middleware)
-        self.exc_handlers: ExceptionHandlers = dict(exception_handlers or {})
         self.state: State = state
+        self.exc_handlers: ExceptionHandlers = dict(exception_handlers or {})
         self.jobber_config: JobberConfiguration = jobber_config
 
     def register(
@@ -136,7 +133,7 @@ class JobRegistrator(Registrator[JobRoute[..., Any]]):
         func: Callable[ParamsT, ReturnT],
         fname: str,
         options: RouteOptions,
-    ) -> JobRoute[ParamsT, ReturnT]:
+    ) -> RootRoute[ParamsT, ReturnT]:
         if self.jobber_config.app_started is True:
             raise_app_already_started_error("register")
 
@@ -146,7 +143,7 @@ class JobRegistrator(Registrator[JobRoute[..., Any]]):
                 self.jobber_config,
                 mode=options.run_mode,
             )
-            route = JobRoute(
+            route = RootRoute(
                 func=func,
                 state=self.state,
                 options=options,
@@ -160,10 +157,10 @@ class JobRegistrator(Registrator[JobRoute[..., Any]]):
                 p = (route, options.cron)
                 self.state.setdefault(PENDING_CRON_JOBS, []).append(p)
 
-        return cast("JobRoute[ParamsT, ReturnT]", self._routes[fname])
+        return cast("RootRoute[ParamsT, ReturnT]", self._routes[fname])
 
 
-class JobRouter(Router[JobRegistrator]):
+class RootRouter(Router):
     def __init__(
         self,
         *,
@@ -174,7 +171,8 @@ class JobRouter(Router[JobRegistrator]):
         exception_handlers: MappingExceptionHandlers | None,
     ) -> None:
         super().__init__(
-            registrator=JobRegistrator(
+            prefix=None,
+            registrator=RootRegistrator(
                 state,
                 lifespan,
                 middleware,
@@ -182,6 +180,7 @@ class JobRouter(Router[JobRegistrator]):
                 exception_handlers,
             ),
         )
+        self.task: RootRegistrator = cast("RootRegistrator", self._registrator)
 
     def add_exception_handler(
         self,
@@ -196,3 +195,27 @@ class JobRouter(Router[JobRegistrator]):
         if self.task.jobber_config.app_started is True:
             raise_app_already_started_error("add_middleware")
         super().add_middleware(middleware)
+
+    def include_router(self, router: Router) -> None:
+        super().include_router(router)
+        self._revive_node(self)
+
+    def _revive_node(self, router: Router) -> None:
+        parent = cast("NodeRouter", router)
+        for sub_router in parent.sub_routers:
+            sub_router.prefix = f"{parent.prefix}{sub_router.prefix}"
+            sub_router._registrator.state.update(parent._registrator.state)
+            sub_router._registrator._middleware.extendleft(
+                parent._registrator._middleware
+            )
+            for route in sub_router.routes:
+                new_fname = f"{sub_router.prefix}{route.fname}"
+                route.fname = new_fname
+                real_route = self.task.register(
+                    route.func,
+                    new_fname,
+                    route.options,
+                )
+                route.bind(real_route)
+
+            self._revive_node(sub_router)

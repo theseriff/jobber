@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Literal, TypeVar
 from jobber._internal.jobber import Jobber as _Jobber
 from jobber._internal.storage.dummy import DummyRepository
 from jobber._internal.storage.sqlite import SQLiteJobRepository
-from jobber.crontab import Crontab
+from jobber.crontab import CronTab
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Sequence
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from zoneinfo import ZoneInfo
 
     from jobber._internal.common.types import Lifespan, LoopFactory
-    from jobber._internal.cron_parser import CronParser
+    from jobber._internal.cron_parser import AnyCronParser
     from jobber._internal.middleware.base import BaseMiddleware
     from jobber._internal.middleware.exceptions import MappingExceptionHandlers
     from jobber._internal.serializers.base import JobsSerializer
@@ -52,7 +52,7 @@ class Jobber(_Jobber):
         exception_handlers: MappingExceptionHandlers | None = None,
         threadpool_executor: ThreadPoolExecutor | None = None,
         processpool_executor: ProcessPoolExecutor | None = None,
-        cron_parser_cls: type[CronParser] | None = None,
+        cron_parser: type[AnyCronParser] | None = None,
     ) -> None:
         """Initialize a `Jobber` instance."""
         if durable is False:
@@ -69,5 +69,5 @@ class Jobber(_Jobber):
             exception_handlers=exception_handlers,
             threadpool_executor=threadpool_executor,
             processpool_executor=processpool_executor,
-            cron_parser_cls=cron_parser_cls or Crontab,
+            cron_parser=cron_parser or CronTab,
         )

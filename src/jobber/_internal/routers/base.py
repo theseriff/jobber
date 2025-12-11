@@ -26,6 +26,7 @@ if TYPE_CHECKING:
         AsyncIterator,
         Callable,
         Coroutine,
+        Iterator,
         Mapping,
         Sequence,
     )
@@ -36,25 +37,20 @@ if TYPE_CHECKING:
     from jobber._internal.runner.scheduler import ScheduleBuilder
 
 
-T = TypeVar("T")
-ReturnT = TypeVar("ReturnT")
 ParamsT = ParamSpec("ParamsT")
+Return_co = TypeVar("Return_co", covariant=True)
 Route_co = TypeVar("Route_co", bound="Route[..., Any]", covariant=True)
-Registrator_co = TypeVar(
-    "Registrator_co",
-    bound="Registrator[Route[..., Any]]",
-    covariant=True,
-)
+T_co = TypeVar("T_co", covariant=True)
 
 
-class Route(ABC, Generic[ParamsT, ReturnT]):
+class Route(ABC, Generic[ParamsT, Return_co]):
     def __init__(
         self,
-        func: Callable[ParamsT, ReturnT],
+        func: Callable[ParamsT, Return_co],
         fname: str,
         options: RouteOptions,
     ) -> None:
-        self.func: Callable[ParamsT, ReturnT] = func
+        self.func: Callable[ParamsT, Return_co] = func
         self.fname: str = fname
         self.options: RouteOptions = options
 
@@ -62,29 +58,29 @@ class Route(ABC, Generic[ParamsT, ReturnT]):
         self,
         *args: ParamsT.args,
         **kwargs: ParamsT.kwargs,
-    ) -> ReturnT:
+    ) -> Return_co:
         return self.func(*args, **kwargs)
 
     @overload
     def schedule(
-        self: Route[ParamsT, CoroutineType[object, object, T]],
+        self: Route[ParamsT, CoroutineType[object, object, T_co]],
         *args: ParamsT.args,
         **kwargs: ParamsT.kwargs,
-    ) -> ScheduleBuilder[T]: ...
+    ) -> ScheduleBuilder[T_co]: ...
 
     @overload
     def schedule(
-        self: Route[ParamsT, Coroutine[object, object, T]],
+        self: Route[ParamsT, Coroutine[object, object, T_co]],
         *args: ParamsT.args,
         **kwargs: ParamsT.kwargs,
-    ) -> ScheduleBuilder[T]: ...
+    ) -> ScheduleBuilder[T_co]: ...
 
     @overload
     def schedule(
-        self: Route[ParamsT, ReturnT],
+        self: Route[ParamsT, Return_co],
         *args: ParamsT.args,
         **kwargs: ParamsT.kwargs,
-    ) -> ScheduleBuilder[ReturnT]: ...
+    ) -> ScheduleBuilder[Return_co]: ...
 
     @abstractmethod
     def schedule(
@@ -96,11 +92,11 @@ class Route(ABC, Generic[ParamsT, ReturnT]):
 
 
 @asynccontextmanager
-async def dummy_lifespan(_: Router[Registrator_co]) -> AsyncIterator[None]:
+async def dummy_lifespan(_: Router) -> AsyncIterator[None]:
     yield None
 
 
-def resolve_fname(func: Callable[ParamsT, ReturnT], /) -> str:
+def resolve_fname(func: Callable[ParamsT, Return_co], /) -> str:
     fname = func.__name__
     fmodule = func.__module__
     if fname == "<lambda>":
@@ -113,14 +109,14 @@ def resolve_fname(func: Callable[ParamsT, ReturnT], /) -> str:
 class Registrator(ABC, Generic[Route_co]):
     def __init__(
         self,
-        lifespan: Lifespan[T] | None,
+        lifespan: Lifespan[T_co] | None,
         middleware: Sequence[BaseMiddleware] | None,
     ) -> None:
         self._routes: dict[str, Route_co] = {}
         self._lifespan: Final = lifespan or dummy_lifespan
         self._state_lifespan: Final = self._iter_lifespan(self._lifespan)
         self.state: State = State()
-        self.middleware: deque[BaseMiddleware] = deque(middleware or [])
+        self._middleware: deque[BaseMiddleware] = deque(middleware or [])
 
     async def _iter_lifespan(
         self,
@@ -140,8 +136,8 @@ class Registrator(ABC, Generic[Route_co]):
     @overload
     def __call__(
         self,
-        func: Callable[ParamsT, ReturnT],
-    ) -> Route[ParamsT, ReturnT]: ...
+        func: Callable[ParamsT, Return_co],
+    ) -> Route[ParamsT, Return_co]: ...
 
     @overload
     def __call__(
@@ -154,12 +150,14 @@ class Registrator(ABC, Generic[Route_co]):
         func_name: str | None = None,
         cron: str | None = None,
         metadata: Mapping[str, Any] | None = None,
-    ) -> Callable[[Callable[ParamsT, ReturnT]], Route[ParamsT, ReturnT]]: ...
+    ) -> Callable[
+        [Callable[ParamsT, Return_co]], Route[ParamsT, Return_co]
+    ]: ...
 
     @overload
     def __call__(
         self,
-        func: Callable[ParamsT, ReturnT],
+        func: Callable[ParamsT, Return_co],
         *,
         retry: int = 0,
         timeout: float = 600,
@@ -168,11 +166,11 @@ class Registrator(ABC, Generic[Route_co]):
         func_name: str | None = None,
         cron: str | None = None,
         metadata: Mapping[str, Any] | None = None,
-    ) -> Route[ParamsT, ReturnT]: ...
+    ) -> Route[ParamsT, Return_co]: ...
 
     def __call__(  # noqa: PLR0913
         self,
-        func: Callable[ParamsT, ReturnT] | None = None,
+        func: Callable[ParamsT, Return_co] | None = None,
         *,
         retry: int = 0,
         timeout: float = 600,  # default 10 min.
@@ -182,8 +180,8 @@ class Registrator(ABC, Generic[Route_co]):
         cron: str | None = None,
         metadata: Mapping[str, Any] | None = None,
     ) -> (
-        Route[ParamsT, ReturnT]
-        | Callable[[Callable[ParamsT, ReturnT]], Route[ParamsT, ReturnT]]
+        Route[ParamsT, Return_co]
+        | Callable[[Callable[ParamsT, Return_co]], Route[ParamsT, Return_co]]
     ):
         if max_cron_failures < 1:
             msg = (
@@ -209,10 +207,10 @@ class Registrator(ABC, Generic[Route_co]):
     def _register(
         self,
         options: RouteOptions,
-    ) -> Callable[[Callable[ParamsT, ReturnT]], Route[ParamsT, ReturnT]]:
+    ) -> Callable[[Callable[ParamsT, Return_co]], Route[ParamsT, Return_co]]:
         def wrapper(
-            func: Callable[ParamsT, ReturnT],
-        ) -> Route[ParamsT, ReturnT]:
+            func: Callable[ParamsT, Return_co],
+        ) -> Route[ParamsT, Return_co]:
             fname = options.func_name or resolve_fname(func)
             return self.register(func, fname, options)
 
@@ -221,29 +219,34 @@ class Registrator(ABC, Generic[Route_co]):
     @abstractmethod
     def register(
         self,
-        func: Callable[ParamsT, ReturnT],
+        func: Callable[ParamsT, Return_co],
         fname: str,
         options: RouteOptions,
-    ) -> Route[ParamsT, ReturnT]:
+    ) -> Route[ParamsT, Return_co]:
         raise NotImplementedError
 
 
-class Router(ABC, Generic[Registrator_co]):
+class Router:
     def __init__(
         self,
         *,
-        registrator: Registrator_co,
+        prefix: str | None,
+        registrator: Registrator[Route[..., Any]],
     ) -> None:
-        self._parent: Router[Registrator_co] | None = None
-        self._sub_routers: list[Router[Registrator_co]] = []
-        self.task: Registrator_co = registrator
+        self.prefix: str = f"{prefix}:" if prefix else ""
+        self._parent: Router | None = None
+        self._sub_routers: list[Router] = []
+        self._registrator: Registrator[Route[..., Any]] = registrator
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}>"
 
     @property
-    def parent(self) -> Router[Registrator_co] | None:
+    def parent(self) -> Router | None:
         return self._parent
 
     @parent.setter
-    def parent(self, router: Router[Registrator_co]) -> None:
+    def parent(self, router: Router) -> None:
         """Set the parent router for this router (internal use only).
 
         Do not use this method in own code.
@@ -257,7 +260,7 @@ class Router(ABC, Generic[Registrator_co]):
             msg = "Self-referencing routers is not allowed"
             raise RuntimeError(msg)
 
-        parent: Router[Registrator_co] | None = router
+        parent: Router | None = router
 
         while parent is not None:
             if parent is self:
@@ -267,10 +270,24 @@ class Router(ABC, Generic[Registrator_co]):
 
         self._parent = router
 
-    def include_router(self, router: Router[Registrator_co]) -> None:
+    def include_router(self, router: Router) -> None:
         router.parent = self
         self._sub_routers.append(router)
 
-    @abstractmethod
+    def include_routers(self, *routers: Router) -> None:
+        if not routers:
+            msg = "At least one router must be provided"
+            raise ValueError(msg)
+        for router in routers:
+            self.include_router(router)
+
     def add_middleware(self, middleware: BaseMiddleware) -> None:
-        self.task.middleware.appendleft(middleware)
+        self._registrator._middleware.appendleft(middleware)
+
+    @property
+    def routes(self) -> Iterator[Route[..., Any]]:
+        yield from self._registrator._routes.values()
+
+    @property
+    def sub_routers(self) -> Iterator[Router]:
+        yield from self._sub_routers

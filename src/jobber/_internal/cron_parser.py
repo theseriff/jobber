@@ -1,12 +1,15 @@
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Protocol, runtime_checkable
+from typing import Any, Generic, TypeAlias, TypeVar
+
+AnyCronParser: TypeAlias = "CronParser[Any]"
+T = TypeVar("T", bound="AnyCronParser")
 
 
-@runtime_checkable
-class CronParser(Protocol, metaclass=ABCMeta):
+class CronParser(ABC, Generic[T]):
+    @classmethod
     @abstractmethod
-    def __init__(self, expression: str) -> None:
+    def create(cls, expression: str) -> T:
         raise NotImplementedError
 
     @abstractmethod

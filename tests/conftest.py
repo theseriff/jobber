@@ -1,11 +1,14 @@
 import inspect
 from datetime import datetime, timedelta
+from typing import TypeAlias
 from unittest.mock import AsyncMock, Mock
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from jobber._internal.cron_parser import CronParser
+
+MockCronParser: TypeAlias = CronParser[Mock]
 
 
 @pytest.fixture(scope="session")
@@ -18,11 +21,12 @@ def now_(now: datetime) -> datetime:
 
 
 @pytest.fixture(scope="session")
-def cron_parser_cls() -> CronParser:
-    cron = Mock(spec=CronParser)
+def cron_parser() -> MockCronParser:
+    cron = Mock(spec=MockCronParser)
+    cron.create.return_value = cron
     cron.next_run.side_effect = now_
     cron.get_expression.return_value = "* * * * * *"
-    return Mock(return_value=cron, spec=type[CronParser])
+    return cron
 
 
 @pytest.fixture

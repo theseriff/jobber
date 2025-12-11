@@ -1,4 +1,3 @@
-# pyright: reportPrivateUsage=false
 from jobber import Jobber
 from jobber._internal.common.constants import JobStatus
 

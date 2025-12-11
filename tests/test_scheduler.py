@@ -1,11 +1,10 @@
-# pyright: reportPrivateUsage=false
 import asyncio
 from datetime import datetime
 
 import pytest
 
 from jobber import Jobber, RunMode
-from jobber._internal.cron_parser import CronParser
+from tests.conftest import MockCronParser
 
 
 def f1(num: int) -> int:
@@ -34,14 +33,14 @@ async def f2(num: int) -> int:
 )
 async def test_jobber(  # noqa: PLR0913
     now: datetime,
-    cron_parser_cls: type[CronParser],
+    cron_parser: type[MockCronParser],
     *,
     method: str,
     num: int,
     expected: int,
     run_mode: RunMode,
 ) -> None:
-    jobber = Jobber(cron_parser_cls=cron_parser_cls)
+    jobber = Jobber(cron_parser=cron_parser)
     f1_reg = jobber.task(f1, func_name="f1_reg", run_mode=run_mode)
     f2_reg = jobber.task(f2, func_name="f2_reg", run_mode=run_mode)
     async with jobber:

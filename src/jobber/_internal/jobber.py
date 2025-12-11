@@ -1,5 +1,3 @@
-# ruff: noqa: SLF001
-# pyright: reportPrivateUsage=false
 from __future__ import annotations
 
 import asyncio
@@ -16,7 +14,7 @@ from jobber._internal.middleware.exceptions import (
 )
 from jobber._internal.middleware.retry import RetryMiddleware
 from jobber._internal.middleware.timeout import TimeoutMiddleware
-from jobber._internal.routers.root import JobRouter
+from jobber._internal.routers.root import RootRouter
 from jobber._internal.serializers.json import JSONSerializer
 
 if TYPE_CHECKING:
@@ -26,7 +24,7 @@ if TYPE_CHECKING:
 
     from jobber._internal.common.types import Lifespan
     from jobber._internal.context import JobContext
-    from jobber._internal.cron_parser import CronParser
+    from jobber._internal.cron_parser import AnyCronParser
     from jobber._internal.middleware.base import BaseMiddleware
     from jobber._internal.runner.runners import Runnable
     from jobber._internal.serializers.base import JobsSerializer
@@ -38,7 +36,7 @@ ParamsT = ParamSpec("ParamsT")
 AppT = TypeVar("AppT", bound="Jobber")
 
 
-class Jobber(JobRouter):
+class Jobber(RootRouter):
     def __init__(  # noqa: PLR0913
         self,
         *,
@@ -51,7 +49,7 @@ class Jobber(JobRouter):
         loop_factory: Callable[[], asyncio.AbstractEventLoop],
         threadpool_executor: ThreadPoolExecutor | None,
         processpool_executor: ProcessPoolExecutor | None,
-        cron_parser_cls: type[CronParser],
+        cron_parser: type[AnyCronParser],
     ) -> None:
         self.state: State = State()
         self.jobber_config: JobberConfiguration = JobberConfiguration(
@@ -63,7 +61,7 @@ class Jobber(JobRouter):
                 threadpool=threadpool_executor,
             ),
             serializer=serializer or JSONSerializer(),
-            cron_parser_cls=cron_parser_cls,
+            cron_parser=cron_parser,
             _tasks_registry=set(),
             _jobs_registry={},
         )
@@ -86,7 +84,7 @@ class Jobber(JobRouter):
             RetryMiddleware(),
             ExceptionMiddleware(self.task.exc_handlers, self.jobber_config),
         )
-        user_middlewares = self.task.middleware
+        user_middlewares = self.task._middleware
         user_middlewares.extend(system_middlewares)
         middleware_chain = build_middleware(user_middlewares, self._entry)
         for route in self.task._routes.values():

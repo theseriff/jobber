@@ -1,4 +1,3 @@
-# pyright: reportPrivateUsage=false
 from collections.abc import Callable
 
 import pytest
