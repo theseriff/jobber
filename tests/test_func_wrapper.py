@@ -3,7 +3,7 @@ from collections.abc import Callable
 import pytest
 
 from jobber import Jobber
-from jobber._internal.routers.base import resolve_fname
+from jobber._internal.router.base import resolve_fname
 
 
 def somefunc() -> None:

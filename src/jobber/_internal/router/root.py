@@ -15,7 +15,7 @@ from jobber._internal.middleware.base import build_middleware
 from jobber._internal.middleware.exceptions import ExceptionMiddleware
 from jobber._internal.middleware.retry import RetryMiddleware
 from jobber._internal.middleware.timeout import TimeoutMiddleware
-from jobber._internal.routers.base import Registrator, Route, Router
+from jobber._internal.router.base import Registrator, Route, Router
 from jobber._internal.runner.runners import Runnable, create_run_strategy
 from jobber._internal.runner.scheduler import ScheduleBuilder
 
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
         ExceptionHandlers,
         MappingExceptionHandlers,
     )
-    from jobber._internal.routers.node import NodeRouter
+    from jobber._internal.router.node import NodeRouter
     from jobber._internal.runner.runners import RunStrategy
 
 
@@ -197,7 +197,10 @@ class RootRouter(Router):
                 exception_handlers,
             ),
         )
-        self.task: RootRegistrator = cast("RootRegistrator", self._registrator)
+
+    @property
+    def task(self) -> RootRegistrator:
+        return cast("RootRegistrator", self._registrator)
 
     def add_exception_handler(
         self,
@@ -237,22 +240,22 @@ class RootRouter(Router):
         await router._registrator.emit_startup()
         chain = build_middleware(router._registrator._middleware, self._entry)
         for route in cast("Iterator[RootRoute[..., Any]]", router.routes):
-            route.state = router._registrator.state
+            route.state = router.task.state
             route._chain_middleware = chain
 
         for sub_router in router.sub_routers:
-            sub_router._registrator.state.update(
-                router._registrator.state | sub_router._registrator.state
+            sub_router.task.state.update(
+                router.task.state | sub_router.task.state
             )
-            sub_router._registrator._middleware = [
-                *router._registrator._middleware,
-                *sub_router._registrator._middleware,
+            sub_router.task._middleware = [
+                *router.task._middleware,
+                *sub_router.task._middleware,
             ]
             await self._propagate_startup(sub_router)
 
     async def _propagate_shutdown(self) -> None:
         for router in self.chain_tail:
-            await router._registrator.emit_shutdown()
+            await router.task.emit_shutdown()
 
     async def _entry(self, context: JobContext) -> Any:  # noqa: ANN401
         runnable: Runnable[Any] = context.runnable

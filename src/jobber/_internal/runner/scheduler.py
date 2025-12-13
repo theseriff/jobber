@@ -11,11 +11,7 @@ from uuid import uuid4
 from jobber._internal.common.constants import JobStatus
 from jobber._internal.common.datastructures import RequestState, State
 from jobber._internal.context import JobContext
-from jobber._internal.exceptions import (
-    JobSkippedError,
-    JobTimeoutError,
-    NegativeDelayError,
-)
+from jobber._internal.exceptions import JobTimeoutError, NegativeDelayError
 from jobber._internal.runner.job import Job
 
 if TYPE_CHECKING:
@@ -23,7 +19,7 @@ if TYPE_CHECKING:
         JobberConfiguration,
         RouteOptions,
     )
-    from jobber._internal.cron_parser import AnyCronParser
+    from jobber._internal.cron_parser import CronParser
     from jobber._internal.middleware.base import CallNext
     from jobber._internal.runner.runners import Runnable
 
@@ -36,7 +32,7 @@ ReturnT = TypeVar("ReturnT")
 @dataclass(slots=True, kw_only=True, frozen=True)
 class ScheduleContext(Generic[ReturnT]):
     job: Job[ReturnT]
-    cron_parser: AnyCronParser | None
+    cron_parser: CronParser | None
 
 
 @final
@@ -76,9 +72,7 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
         job_id: str | None = None,
     ) -> Job[ReturnT]:
         now = now or datetime.now(tz=self._jobber_config.tz)
-        cron_parser = self._jobber_config.cron_parser.create(
-            expression=expression
-        )
+        cron_parser = self._jobber_config.factory_cron(expression)
         next_at = cron_parser.next_run(now=now)
         return await self._at(
             now=now,
@@ -123,7 +117,7 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
         now: datetime,
         at: datetime,
         job_id: str,
-        cron_parser: AnyCronParser | None = None,
+        cron_parser: CronParser | None = None,
     ) -> Job[ReturnT]:
         delay_seconds = self._calculate_delay_seconds(now=now, at=at)
         cron_exp = cron_parser.get_expression() if cron_parser else None
@@ -176,9 +170,6 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
         except JobTimeoutError as exc:
             job.set_exception(exc, status=JobStatus.TIMEOUT)
             job.register_failures()
-        except JobSkippedError as exc:
-            logger.debug("Job %s execution was skipped by middleware", job.id)
-            job.set_exception(exc, status=JobStatus.SKIPPED)
         except Exception as exc:
             logger.exception("Job %s failed with unexpected error", job.id)
             job.set_exception(exc, status=JobStatus.FAILED)
@@ -206,7 +197,7 @@ class ScheduleBuilder(ABC, Generic[ReturnT]):
         self,
         scheduler_ctx: ScheduleContext[ReturnT],
     ) -> None:
-        cron_parser = cast("AnyCronParser", scheduler_ctx.cron_parser)
+        cron_parser = cast("CronParser", scheduler_ctx.cron_parser)
         now = datetime.now(tz=self._jobber_config.tz)
         next_at = cron_parser.next_run(now=now)
         delay_seconds = self._calculate_delay_seconds(now=now, at=next_at)

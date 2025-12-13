@@ -8,7 +8,7 @@ from crontab import CronTab as _CronTab
 from jobber._internal.cron_parser import CronParser
 
 
-class CronTab(CronParser["CronTab"]):
+class CronTab(CronParser):
     """Cron expression parser based on the `crontab` library."""
 
     __slots__: tuple[str, ...] = ("_entry", "_expression")
@@ -22,19 +22,6 @@ class CronTab(CronParser["CronTab"]):
         """
         self._expression: str = expression
         self._entry: Final = _CronTab(expression)
-
-    @classmethod
-    def create(cls, expression: str) -> "CronTab":
-        """Create a CronTab instance.
-
-        Args:
-            expression: A cron expression.
-
-        Returns:
-            A new CronTab instance.
-
-        """
-        return cls(expression)
 
     def next_run(self, *, now: datetime) -> datetime:
         """Compute the next scheduled execution time.
@@ -56,3 +43,16 @@ class CronTab(CronParser["CronTab"]):
 
         """
         return self._expression
+
+
+def create_crontab(expression: str) -> CronTab:
+    """Create a CronTab instance.
+
+    Args:
+        expression: A cron expression.
+
+    Returns:
+        A new CronTab instance.
+
+    """
+    return CronTab(expression)

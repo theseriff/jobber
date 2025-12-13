@@ -8,11 +8,11 @@ from typing import TYPE_CHECKING, Literal, TypeVar
 from zoneinfo import ZoneInfo
 
 from jobber._internal.configuration import JobberConfiguration, WorkerPools
-from jobber._internal.routers.root import RootRouter
+from jobber._internal.router.root import RootRouter
 from jobber._internal.serializers.json import JSONSerializer
 from jobber._internal.storage.dummy import DummyRepository
 from jobber._internal.storage.sqlite import SQLiteJobRepository
-from jobber.crontab import CronTab
+from jobber.crontab import create_crontab
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Sequence
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from jobber._internal.common.types import Lifespan, LoopFactory
-    from jobber._internal.cron_parser import AnyCronParser
+    from jobber._internal.cron_parser import FactoryCron
     from jobber._internal.middleware.base import BaseMiddleware
     from jobber._internal.middleware.exceptions import MappingExceptionHandlers
     from jobber._internal.serializers.base import JobsSerializer
@@ -55,7 +55,7 @@ class Jobber(RootRouter):
         exception_handlers: MappingExceptionHandlers | None = None,
         threadpool_executor: ThreadPoolExecutor | None = None,
         processpool_executor: ProcessPoolExecutor | None = None,
-        cron_parser: type[AnyCronParser] | None = None,
+        factory_cron: FactoryCron | None = None,
     ) -> None:
         """Initialize a `Jobber` instance."""
         if durable is False:
@@ -72,7 +72,7 @@ class Jobber(RootRouter):
                 threadpool=threadpool_executor,
             ),
             serializer=serializer or JSONSerializer(),
-            cron_parser=cron_parser or CronTab,
+            factory_cron=factory_cron or create_crontab,
             _tasks_registry=set(),
             _jobs_registry={},
         )
@@ -118,7 +118,7 @@ class Jobber(RootRouter):
         """
         self.jobber_config.app_started = False
         if tasks := self.jobber_config._tasks_registry:
-            for task in tasks:
+            for task in tuple(tasks):
                 _ = task.cancel()
             _ = await asyncio.gather(*tasks, return_exceptions=True)
             self.jobber_config._tasks_registry.clear()

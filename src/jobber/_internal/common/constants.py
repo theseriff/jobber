@@ -10,7 +10,6 @@ EMPTY: Any = EmptyPlaceholder()
 class JobStatus(str, Enum):
     SCHEDULED = "scheduled"
     RUNNING = "running"
-    SKIPPED = "skipped"
     CANCELLED = "cancelled"
     SUCCESS = "success"
     FAILED = "failed"

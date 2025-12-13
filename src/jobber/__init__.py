@@ -11,7 +11,7 @@ from jobber._internal.common.constants import JobStatus, RunMode
 from jobber._internal.common.datastructures import RequestState, State
 from jobber._internal.context import JobContext
 from jobber._internal.injection import INJECT
-from jobber._internal.routers.node import NodeRouter as JobRouter
+from jobber._internal.router.node import NodeRouter as JobRouter
 from jobber._internal.runner.job import Job
 from jobber._internal.runner.runners import Runnable
 from jobber._internal.runner.scheduler import ScheduleBuilder

@@ -1,7 +1,7 @@
 import pytest
 
 from jobber import Jobber, JobRouter
-from jobber._internal.routers.base import resolve_fname
+from jobber._internal.router.base import resolve_fname
 
 
 def test_nested_prefix() -> None:
@@ -22,6 +22,7 @@ def test_nested_prefix() -> None:
     app = Jobber()
     app.include_router(router1)
 
+    assert repr(router1) == "<NodeRouter>"
     assert router5.prefix == "1.2.3.4"
 
     for router, prefix in zip(sub4_routers, "abcd", strict=True):
@@ -54,12 +55,12 @@ def test_nested_fname() -> None:
     assert f3.fname == f"level1.level2:{resolve_fname(f3)}"
 
 
-def test_router_not_included() -> None:
+async def test_router_include() -> None:
     router1 = JobRouter(prefix="level1")
 
     @router1.task(func_name="test1")
-    async def f() -> None:
-        pass
+    async def f() -> str:
+        return "test"
 
     match = (
         f"Job {f.fname!r} is not attached to any Jobber app."
@@ -67,14 +68,6 @@ def test_router_not_included() -> None:
     )
     with pytest.raises(RuntimeError, match=match):
         _ = f.schedule()
-
-
-async def test_router_included() -> None:
-    router1 = JobRouter(prefix="level1")
-
-    @router1.task(func_name="test1")
-    async def f() -> str:
-        return "test"
 
     app = Jobber()
     app.include_router(router1)
@@ -84,3 +77,33 @@ async def test_router_included() -> None:
         await job.wait()
 
     assert job.result() == "test"
+
+
+def test_router_wrong_usage() -> None:
+    router = JobRouter()
+    app = Jobber()
+    app.include_router(router)
+
+    with pytest.raises(
+        RuntimeError,
+        match=f"Router is already attached to {app!r}",
+    ):
+        app.include_router(router)
+
+    with pytest.raises(
+        RuntimeError,
+        match="Self-referencing routers is not allowed",
+    ):
+        app.include_router(app)
+
+    with pytest.raises(
+        RuntimeError,
+        match="Circular referencing of Router is not allowed",
+    ):
+        router.include_router(app)
+
+    with pytest.raises(
+        ValueError,
+        match="At least one router must be provided",
+    ):
+        app.include_routers()

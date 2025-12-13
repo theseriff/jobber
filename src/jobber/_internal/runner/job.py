@@ -1,14 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Generic, TypeVar, cast, final
+from typing import TYPE_CHECKING, Generic, TypeVar, final
 
 from jobber._internal.common.constants import EMPTY, JobStatus
-from jobber._internal.exceptions import (
-    JobFailedError,
-    JobNotCompletedError,
-    JobSkippedError,
-)
+from jobber._internal.exceptions import JobFailedError, JobNotCompletedError
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -69,8 +65,6 @@ class Job(Generic[ReturnT]):
         )
 
     def result(self) -> ReturnT:
-        if self.status is JobStatus.SKIPPED:
-            raise cast("JobSkippedError", self.exception)
         if self.status is JobStatus.SUCCESS or self._result is not EMPTY:
             return self._result
         if self.status is JobStatus.FAILED:

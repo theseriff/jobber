@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
     from jobber._internal.common.constants import RunMode
     from jobber._internal.common.types import LoopFactory
-    from jobber._internal.cron_parser import AnyCronParser
+    from jobber._internal.cron_parser import FactoryCron
     from jobber._internal.runner.job import Job
     from jobber._internal.serializers.base import JobsSerializer
     from jobber._internal.storage.abc import JobRepository
@@ -50,7 +50,7 @@ class JobberConfiguration:
     durable: JobRepository
     worker_pools: WorkerPools
     serializer: JobsSerializer
-    cron_parser: type[AnyCronParser]
+    factory_cron: FactoryCron
     app_started: bool = False
     _jobs_registry: dict[str, Job[Any]]
     _tasks_registry: set[asyncio.Task[Any]]

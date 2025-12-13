@@ -227,7 +227,7 @@ class Registrator(ABC, Generic[Route_co]):
         raise NotImplementedError
 
 
-class Router:
+class Router(ABC):
     def __init__(
         self,
         *,
@@ -235,12 +235,31 @@ class Router:
         registrator: Registrator[Route[..., Any]],
     ) -> None:
         self.prefix: str = prefix if prefix else ""
+        self._registrator: Registrator[Route[..., Any]] = registrator
         self._parent: Router | None = None
         self._sub_routers: list[Router] = []
-        self._registrator: Registrator[Route[..., Any]] = registrator
+
+    @property
+    @abstractmethod
+    def task(self) -> Registrator[Route[..., Any]]:
+        raise NotImplementedError
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__}>"
+
+    @property
+    def chain_tail(self) -> Iterator[Router]:
+        yield self
+        for router in self.sub_routers:
+            yield from router.chain_tail
+
+    @property
+    def routes(self) -> Iterator[Route[..., Any]]:
+        yield from self._registrator._routes.values()
+
+    @property
+    def sub_routers(self) -> Sequence[Router]:
+        return self._sub_routers
 
     @property
     def parent(self) -> Router | None:
@@ -284,20 +303,6 @@ class Router:
 
     def add_middleware(self, middleware: BaseMiddleware) -> None:
         self._registrator._middleware.append(middleware)
-
-    @property
-    def chain_tail(self) -> Iterator[Router]:
-        yield self
-        for router in self.sub_routers:
-            yield from router.chain_tail
-
-    @property
-    def routes(self) -> Iterator[Route[..., Any]]:
-        yield from self._registrator._routes.values()
-
-    @property
-    def sub_routers(self) -> Sequence[Router]:
-        return self._sub_routers
 
     def remove_route(self, fname: str) -> None:
         del self._registrator._routes[fname]

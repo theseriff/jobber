@@ -4,10 +4,7 @@ from typing import Any
 from unittest import mock
 from unittest.mock import call
 
-import pytest
-
 from jobber import Jobber, JobContext, JobStatus
-from jobber.exceptions import JobSkippedError
 from jobber.middleware import BaseMiddleware, CallNext
 
 
@@ -36,12 +33,6 @@ async def test_common_case(amock: mock.AsyncMock) -> None:
 
         job = await f.schedule(2).delay(0)
         await job.wait()
-        assert job.status is JobStatus.SKIPPED
-        with pytest.raises(
-            JobSkippedError,
-            match=r"Job was not executed\. A middleware short-circuited",
-        ):
-            _ = job.result()
         amock.assert_not_awaited()
 
 

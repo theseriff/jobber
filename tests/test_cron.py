@@ -5,11 +5,12 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from jobber import Jobber
-from jobber.crontab import CronTab
+from jobber._internal.cron_parser import FactoryCron
+from jobber.crontab import create_crontab
 
 
 def test_cronparser() -> None:
-    cron = CronTab.create("@daily")
+    cron = create_crontab("@daily")
     now = datetime.now(tz=ZoneInfo("Europe/Moscow"))
     next_run = cron.next_run(now=now)
     expected_run = (now + timedelta(days=1)).replace(
@@ -24,9 +25,9 @@ def test_cronparser() -> None:
 
 async def test_cron_reschedule(
     now: datetime,
-    cron_parser: type[CronTab],
+    cron_parser: FactoryCron,
 ) -> None:
-    jobber = Jobber(cron_parser=cron_parser)
+    jobber = Jobber(factory_cron=cron_parser)
 
     @jobber.task
     def t(name: str) -> str:
@@ -45,11 +46,11 @@ async def test_cron_reschedule(
 
 async def test_max_cron_failures(
     amock: mock.AsyncMock,
-    cron_parser: type[CronTab],
+    cron_parser: FactoryCron,
 ) -> None:
     amock.side_effect = ValueError
 
-    jobber = Jobber(cron_parser=cron_parser)
+    jobber = Jobber(factory_cron=cron_parser)
     match = "max_cron_failures must be >= 1. Use 1 for 'stop on first error'."
     with pytest.raises(ValueError, match=match):
         _ = jobber.task(amock, max_cron_failures=0)
@@ -66,8 +67,8 @@ async def test_max_cron_failures(
     assert not job.should_reschedule(max_failures)
 
 
-async def test_cron_declarative(cron_parser: type[CronTab]) -> None:
-    jobber = Jobber(cron_parser=cron_parser)
+async def test_cron_declarative(cron_parser: FactoryCron) -> None:
+    jobber = Jobber(factory_cron=cron_parser)
 
     @jobber.task(cron="* * * * * * *")
     async def _() -> str:

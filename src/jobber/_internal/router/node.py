@@ -4,7 +4,7 @@ import functools
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 
 from jobber._internal.common.datastructures import State
-from jobber._internal.routers.base import Registrator, Route, Router
+from jobber._internal.router.base import Registrator, Route, Router
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
@@ -83,7 +83,10 @@ class NodeRouter(Router):
             prefix=prefix,
             registrator=NodeRegistrator(self.state, lifespan, middleware),
         )
-        self.task: NodeRegistrator = cast("NodeRegistrator", self._registrator)
+
+    @property
+    def task(self) -> NodeRegistrator:
+        return cast("NodeRegistrator", self._registrator)
 
     @property
     def routes(self) -> Iterator[NodeRoute[..., Any]]:
