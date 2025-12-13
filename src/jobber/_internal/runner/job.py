@@ -29,8 +29,8 @@ class Job(Generic[ReturnT]):
         "cron_expression",
         "exception",
         "exec_at",
+        "fname",
         "id",
-        "name",
         "status",
     )
 
@@ -53,7 +53,7 @@ class Job(Generic[ReturnT]):
         self.exception: Exception | None = None
         self.cron_expression = cron_expression
         self.exec_at = exec_at
-        self.name = func_name
+        self.fname = func_name
         self.status = job_status
 
     def __repr__(self) -> str:
@@ -61,7 +61,7 @@ class Job(Generic[ReturnT]):
             f"{self.__class__.__qualname__}("
             f"instance_id={id(self)}, "
             f"exec_at={self.exec_at.isoformat()}, "
-            f"job_name={self.name}, job_id={self.id})"
+            f"job_name={self.fname}, job_id={self.id})"
         )
 
     def result(self) -> ReturnT:

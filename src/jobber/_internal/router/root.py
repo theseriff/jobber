@@ -166,14 +166,17 @@ class RootRegistrator(Registrator[RootRoute[..., Any]]):
             _ = functools.update_wrapper(route, func)
             self._routes[fname] = route
             if options.cron:
-                p = (route, options.cron)
+                p = (route, route.fname, options.cron)
                 self.state.setdefault(PENDING_CRON_JOBS, []).append(p)
 
         return cast("RootRoute[ParamsT, ReturnT]", self._routes[fname])
 
     async def start_crons(self) -> None:
         if crons := self.state.pop(PENDING_CRON_JOBS, []):
-            pending = (route.schedule().cron(cron) for route, cron in crons)
+            pending = (
+                route.schedule().cron(cron, job_id=job_id)
+                for route, job_id, cron in crons
+            )
             _ = await asyncio.gather(*pending)
 
 
@@ -187,20 +190,18 @@ class RootRouter(Router):
         exception_handlers: MappingExceptionHandlers | None,
     ) -> None:
         self.state: State = State()
-        super().__init__(
-            prefix=None,
-            registrator=RootRegistrator(
-                self.state,
-                lifespan,
-                middleware,
-                jobber_config,
-                exception_handlers,
-            ),
+        super().__init__(prefix=None)
+        self._registrator: RootRegistrator = RootRegistrator(
+            self.state,
+            lifespan,
+            middleware,
+            jobber_config,
+            exception_handlers,
         )
 
     @property
     def task(self) -> RootRegistrator:
-        return cast("RootRegistrator", self._registrator)
+        return self._registrator
 
     def add_exception_handler(
         self,
@@ -218,35 +219,36 @@ class RootRouter(Router):
 
     def include_router(self, router: Router) -> None:
         super().include_router(router)
-        self._propagate_real_routes(self)
+        self._propagate_real_routes(cast("NodeRouter", router))
 
-    def _propagate_real_routes(self, router: Router) -> None:
-        parent = cast("NodeRouter", router)
-        for sub_router in parent.sub_routers:
-            sub_router.propagate_prefix(parent)
-            for route in tuple(sub_router.routes):
-                sub_router.remove_route(route.fname)
-                route.fname = f"{sub_router.prefix}:{route.fname}"
-                real_route = self.task.register(
-                    route.func,
-                    route.fname,
-                    route.options,
-                )
-                route.bind(real_route)
-                sub_router.set_route(real_route)
+    def _propagate_real_routes(self, router: NodeRouter) -> None:
+        for route in tuple(router.routes):
+            router.remove_route(route.fname)
+            prefix = f"{router.prefix}:" if router.prefix else ""
+            route.fname = f"{prefix}{route.fname}"
+            real_route = self.task.register(
+                route.func,
+                route.fname,
+                route.options,
+            )
+            route.bind(real_route)
+            router.add_route(real_route)
+
+        for sub_router in router.sub_routers:
+            suffix = f".{sub_router.prefix}" if sub_router.prefix else ""
+            sub_router.prefix = f"{router.prefix}{suffix}"
             self._propagate_real_routes(sub_router)
 
     async def _propagate_startup(self, router: Router) -> None:
-        await router._registrator.emit_startup()
-        chain = build_middleware(router._registrator._middleware, self._entry)
+        await router.task.emit_startup()
+
+        chain = build_middleware(router.task._middleware, self._entry)
         for route in cast("Iterator[RootRoute[..., Any]]", router.routes):
             route.state = router.task.state
             route._chain_middleware = chain
 
         for sub_router in router.sub_routers:
-            sub_router.task.state.update(
-                router.task.state | sub_router.task.state
-            )
+            sub_router.task.state = router.task.state | sub_router.task.state
             sub_router.task._middleware = [
                 *router.task._middleware,
                 *sub_router.task._middleware,

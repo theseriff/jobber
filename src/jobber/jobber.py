@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
+import contextlib
 from typing import TYPE_CHECKING, Literal, TypeVar
 from zoneinfo import ZoneInfo
 
@@ -15,7 +15,7 @@ from jobber._internal.storage.sqlite import SQLiteJobRepository
 from jobber.crontab import create_crontab
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Sequence
+    from collections.abc import Sequence
     from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
     from types import TracebackType
 
@@ -28,11 +28,6 @@ if TYPE_CHECKING:
 
 
 AppT = TypeVar("AppT", bound="Jobber")
-
-
-@asynccontextmanager
-async def _lifespan_stub(_: Jobber) -> AsyncIterator[None]:
-    yield None
 
 
 class Jobber(RootRouter):
@@ -49,7 +44,7 @@ class Jobber(RootRouter):
         tz: ZoneInfo | None = None,
         loop_factory: LoopFactory = lambda: asyncio.get_running_loop(),
         durable: JobRepository | Literal[False] | None = None,
-        lifespan: Lifespan[AppT] = _lifespan_stub,
+        lifespan: Lifespan[AppT] | None = None,
         serializer: JobsSerializer | None = None,
         middleware: Sequence[BaseMiddleware] | None = None,
         exception_handlers: MappingExceptionHandlers | None = None,
@@ -83,6 +78,45 @@ class Jobber(RootRouter):
             jobber_config=self.jobber_config,
             exception_handlers=exception_handlers,
         )
+
+    async def wait_all(self, timeout: float | None = None) -> None:
+        """Wait for all currently scheduled jobs to complete.
+
+        This method waits until all jobs currently registered have finished
+        executing (with statuses of SUCCESS, FAILED, or TIMEOUT). This is
+        useful in situations where it's important to ensure that background
+        tasks have completed before moving on.
+
+        The method sets an internal event when both conditions are met:
+        1. No jobs remain in the jobs registry (`_jobs_registry`)
+
+        Args:
+            timeout (optional): The maximum time in seconds to wait for the
+                jobs to complete. If not specified, the default value of `None`
+                will be used, which means the job will wait indefinitely. If a
+                timeout is specified and it is reached, the method will
+                gracefully exit without raising an exception.
+
+        Example:
+            ```python
+            # Wait for all scheduled jobs to complete
+            await jobber.wait_all()
+            print("All jobs completed!")
+
+            # Or with a timeout (no exception raised on timeout)
+            await jobber.wait_all(timeout=30.0)
+            # Will exit after 30 seconds, even if jobs are still running
+            ```
+
+        """
+
+        async def target() -> None:
+            while jobs := self.jobber_config._jobs_registry.values():
+                coros = (job.wait() for job in jobs)
+                _ = await asyncio.gather(*coros)
+
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(target(), timeout=timeout)
 
     async def startup(self) -> None:
         """Initialize the Jobber application.

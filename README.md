@@ -56,33 +56,40 @@ Here is a simple example of how to schedule and run a job:
 
 ```python
 import asyncio
-import datetime
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from jobber import Jobber
 
 # 1. Initialize Jobber
-app = Jobber()
+app = Jobber(tz=ZoneInfo("UTC"))
+
+
+@app.task(cron="* * * * * * *")  # Runs every seconds
+async def my_cron() -> None:
+    print("Hello! cron running every seconds")
 
 
 # 2. Define your function
-@app.register
+@app.task
 def my_job(name: str) -> None:
-    now = datetime.datetime.now(tz=datetime.timezone.utc)
+    now = datetime.now(tz=timezone.utc)
     print(f"Hello, {name}! job running at: {now!r}")
 
 
 async def main() -> None:
     # 4. Run the Jobber application context
     async with app:
-        job_at = await my_job.schedule("Connor").at(datetime.datetime.now())
-        job_cron = await my_job.schedule("Viliam").cron("* * * * * * *") # Runs every seconds
+        run_next_day = datetime.now(tz=timezone.utc) + timedelta(days=1)
+        job_at = await my_job.schedule("Connor").at(run_next_day)
         job_delay = await my_job.schedule("Sara").delay(20)
 
         await job_at.wait()
-        await job_cron.wait()
         await job_delay.wait()
 
-    # then the application will terminate
+        # Or
+        # It is blocked indefinitely because the cron has infinite planning.
+        await app.wait_all()
 
 
 if __name__ == "__main__":

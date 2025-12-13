@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock
+
 from jobber import Jobber
 from jobber._internal.common.constants import JobStatus
 
@@ -23,3 +25,26 @@ async def test_job() -> None:
     assert job2.status is JobStatus.CANCELLED
     assert job2.id not in job2._jobs_registry
     assert job2._timer_handler.cancelled()
+
+
+async def test_all_jobs_completed(amock: AsyncMock) -> None:
+    app = Jobber()
+    f = app.task(amock)
+
+    async with app:
+        _ = await f.schedule().delay(0)
+        _ = await f.schedule().delay(0)
+        _ = await f.schedule().delay(0)
+
+        await app.wait_all()
+
+        assert len(app.jobber_config._jobs_registry) == 0
+
+        _ = await f.schedule().delay(10)
+        _ = await f.schedule().delay(10)
+        _ = await f.schedule().delay(10)
+
+        await app.wait_all(timeout=0)
+
+        expected_planned_jobs = 3
+        assert len(app.jobber_config._jobs_registry) == expected_planned_jobs
