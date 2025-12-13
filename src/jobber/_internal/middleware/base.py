@@ -7,9 +7,8 @@ from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from jobber._internal.context import JobContext
 
-CallNext = Callable[[JobContext], Awaitable[Any]]
-
 ReturnT = TypeVar("ReturnT")
+CallNext = Callable[[JobContext], Awaitable[Any]]
 
 
 @runtime_checkable

@@ -79,14 +79,16 @@ class NodeRouter(Router):
         middleware: Sequence[BaseMiddleware] | None = None,
     ) -> None:
         self.state: State = State()
-        super().__init__(
-            prefix=prefix,
-            registrator=NodeRegistrator(self.state, lifespan, middleware),
+        super().__init__(prefix=prefix)
+        self._registrator: NodeRegistrator = NodeRegistrator(
+            self.state,
+            lifespan,
+            middleware,
         )
 
     @property
     def task(self) -> NodeRegistrator:
-        return cast("NodeRegistrator", self._registrator)
+        return self._registrator
 
     @property
     def routes(self) -> Iterator[NodeRoute[..., Any]]:

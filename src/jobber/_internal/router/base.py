@@ -232,10 +232,8 @@ class Router(ABC):
         self,
         *,
         prefix: str | None,
-        registrator: Registrator[Route[..., Any]],
     ) -> None:
         self.prefix: str = prefix if prefix else ""
-        self._registrator: Registrator[Route[..., Any]] = registrator
         self._parent: Router | None = None
         self._sub_routers: list[Router] = []
 
@@ -255,7 +253,7 @@ class Router(ABC):
 
     @property
     def routes(self) -> Iterator[Route[..., Any]]:
-        yield from self._registrator._routes.values()
+        yield from self.task._routes.values()
 
     @property
     def sub_routers(self) -> Sequence[Router]:
@@ -302,14 +300,10 @@ class Router(ABC):
             self.include_router(router)
 
     def add_middleware(self, middleware: BaseMiddleware) -> None:
-        self._registrator._middleware.append(middleware)
+        self.task._middleware.append(middleware)
 
     def remove_route(self, fname: str) -> None:
-        del self._registrator._routes[fname]
+        del self.task._routes[fname]
 
-    def set_route(self, route: Route[..., Any]) -> None:
-        self._registrator._routes[route.fname] = route
-
-    def propagate_prefix(self, parent: Router) -> None:
-        sep = "." if parent.prefix and self.prefix else ""
-        self.prefix = f"{parent.prefix}{sep}{self.prefix}"
+    def add_route(self, route: Route[..., Any]) -> None:
+        self.task._routes[route.fname] = route

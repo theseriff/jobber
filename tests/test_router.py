@@ -32,27 +32,26 @@ def test_nested_prefix() -> None:
 def test_nested_fname() -> None:
     router1 = JobRouter(prefix="level1")
     router2 = JobRouter(prefix="level2")
+    router3 = JobRouter()
 
-    @router1.task(func_name="test1")
-    async def f() -> None:
+    async def t() -> None:
         pass
 
-    @router2.task(func_name="test2")
-    async def f2() -> None:
-        pass
-
-    @router2.task
-    async def f3() -> None:
-        pass
+    f = router1.task(t, func_name="test1")
+    f2 = router2.task(t, func_name="test2")
+    f3 = router2.task(t)
+    f4 = router3.task(t, func_name="test4")
 
     router1.include_router(router2)
 
     app = Jobber()
     app.include_router(router1)
+    app.include_router(router3)
 
     assert f.fname == "level1:test1"
     assert f2.fname == "level1.level2:test2"
     assert f3.fname == f"level1.level2:{resolve_fname(f3)}"
+    assert f4.fname == "test4"
 
 
 async def test_router_include() -> None:
