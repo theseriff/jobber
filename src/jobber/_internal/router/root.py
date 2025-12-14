@@ -5,7 +5,6 @@ import functools
 import sys
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 
-from jobber._internal.common.datastructures import State
 from jobber._internal.exceptions import (
     raise_app_already_started_error,
     raise_app_not_started_error,
@@ -22,6 +21,7 @@ from jobber._internal.runner.scheduler import ScheduleBuilder
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
 
+    from jobber._internal.common.datastructures import State
     from jobber._internal.common.types import Lifespan
     from jobber._internal.configuration import (
         JobberConfiguration,
@@ -189,7 +189,6 @@ class RootRouter(Router):
         jobber_config: JobberConfiguration,
         exception_handlers: MappingExceptionHandlers | None,
     ) -> None:
-        self.state: State = State()
         super().__init__(prefix=None)
         self._registrator: RootRegistrator = RootRegistrator(
             self.state,

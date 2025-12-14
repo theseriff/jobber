@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from typing import TYPE_CHECKING, Literal, TypeVar
 from zoneinfo import ZoneInfo
 
@@ -94,8 +93,8 @@ class Jobber(RootRouter):
             timeout (optional): The maximum time in seconds to wait for the
                 jobs to complete. If not specified, the default value of `None`
                 will be used, which means the job will wait indefinitely. If a
-                timeout is specified and it is reached, the method will
-                gracefully exit without raising an exception.
+                timeout is specified and it is reached, the method will raise
+                an `asyncio.TimeoutError`.
 
         Example:
             ```python
@@ -103,9 +102,11 @@ class Jobber(RootRouter):
             await jobber.wait_all()
             print("All jobs completed!")
 
-            # Or with a timeout (no exception raised on timeout)
-            await jobber.wait_all(timeout=30.0)
-            # Will exit after 30 seconds, even if jobs are still running
+            # Or with a timeout (raises asyncio.TimeoutError on timeout)
+            try:
+                await jobber.wait_all(timeout=30.0)
+            except asyncio.TimeoutError:
+                print("Timeout reached while waiting for jobs")
             ```
 
         """
@@ -115,8 +116,7 @@ class Jobber(RootRouter):
                 coros = (job.wait() for job in jobs)
                 _ = await asyncio.gather(*coros)
 
-        with contextlib.suppress(asyncio.TimeoutError):
-            await asyncio.wait_for(target(), timeout=timeout)
+        await asyncio.wait_for(target(), timeout=timeout)
 
     async def startup(self) -> None:
         """Initialize the Jobber application.
