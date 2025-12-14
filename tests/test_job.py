@@ -1,4 +1,7 @@
+import asyncio
 from unittest.mock import AsyncMock
+
+import pytest
 
 from jobber import Jobber
 from jobber._internal.common.constants import JobStatus
@@ -44,7 +47,8 @@ async def test_all_jobs_completed(amock: AsyncMock) -> None:
         _ = await f.schedule().delay(10)
         _ = await f.schedule().delay(10)
 
-        await app.wait_all(timeout=0)
+        with pytest.raises(asyncio.TimeoutError):
+            await app.wait_all(timeout=0)
 
         expected_planned_jobs = 3
         assert len(app.jobber_config._jobs_registry) == expected_planned_jobs

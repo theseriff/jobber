@@ -9,31 +9,6 @@
 
 Jobber is a robust solution that was built from the ground up to handle asynchronous tasks. It offers a clean and modern API that is inspired by leading frameworks.
 
----
-
-## Table of Contents
-
-<!--toc:start-->
-- [Jobber](#jobber)
-  - [Table of Contents](#table-of-contents)
-  - [Why Jobber?](#why-jobber)
-  - [Features](#features)
-  - [Quick Start](#quick-start)
-<!--toc:end-->
-
----
-
-## Why Jobber?
-
-Jobber is a modern, asynchronous task scheduler that offers powerful features and is easy to use. It is designed to help you manage your tasks more efficiently and effectively. Here are some reasons why you might want to consider using it for your next project:
-
-- **Modern Async Support**: Jobber, built with asyncio from the ground up, is perfect for modern Python applications that need to perform tasks without blocking the main thread.
-- **Inspired by the Best**: The API has been inspired by leading frameworks such as Starlette and aiogram, which makes it feel familiar and intuitive for many developers.
-- **Extensibility**: Thanks to support for custom middleware, exception handlers, and serializers, Jobber can be tailored to meet the specific needs of your application.
-- **Developer Experience**: Jobber has been designed to be user-friendly and easy to understand, with clear and concise documentation and a straightforward API.
-
----
-
 ## Features
 
 - **Cron**: Jobber supports cron expressions with an optional seventh field for seconds (`* * * * * * *`) to schedule jobs with high precision and for high-frequency tasks.
@@ -56,13 +31,15 @@ Here is a simple example of how to schedule and run a job:
 
 ```python
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from jobber import Jobber
 
+
+UTC = ZoneInfo("UTC")
 # 1. Initialize Jobber
-app = Jobber(tz=ZoneInfo("UTC"))
+app = Jobber(tz=UTC)
 
 
 @app.task(cron="* * * * * * *")  # Runs every seconds
@@ -70,17 +47,16 @@ async def my_cron() -> None:
     print("Hello! cron running every seconds")
 
 
-# 2. Define your function
 @app.task
 def my_job(name: str) -> None:
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     print(f"Hello, {name}! job running at: {now!r}")
 
 
 async def main() -> None:
     # 4. Run the Jobber application context
     async with app:
-        run_next_day = datetime.now(tz=timezone.utc) + timedelta(days=1)
+        run_next_day = datetime.now(tz=UTC) + timedelta(days=1)
         job_at = await my_job.schedule("Connor").at(run_next_day)
         job_delay = await my_job.schedule("Sara").delay(20)
 

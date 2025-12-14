@@ -17,6 +17,7 @@ from typing import (
 )
 
 from jobber._internal.common.constants import EMPTY, RunMode
+from jobber._internal.common.datastructures import State
 from jobber._internal.configuration import RouteOptions
 
 if TYPE_CHECKING:
@@ -30,7 +31,6 @@ if TYPE_CHECKING:
     )
     from types import CoroutineType
 
-    from jobber._internal.common.datastructures import State
     from jobber._internal.common.types import Lifespan
     from jobber._internal.middleware.base import BaseMiddleware
     from jobber._internal.runner.scheduler import ScheduleBuilder
@@ -233,6 +233,7 @@ class Router(ABC):
         *,
         prefix: str | None,
     ) -> None:
+        self.state: State = State()
         self.prefix: str = prefix if prefix else ""
         self._parent: Router | None = None
         self._sub_routers: list[Router] = []

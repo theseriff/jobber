@@ -3,12 +3,12 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 
-from jobber._internal.common.datastructures import State
 from jobber._internal.router.base import Registrator, Route, Router
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
 
+    from jobber._internal.common.datastructures import State
     from jobber._internal.common.types import Lifespan
     from jobber._internal.configuration import RouteOptions
     from jobber._internal.middleware.base import BaseMiddleware
@@ -78,7 +78,6 @@ class NodeRouter(Router):
         lifespan: Lifespan[NodeRouter_co] | None = None,
         middleware: Sequence[BaseMiddleware] | None = None,
     ) -> None:
-        self.state: State = State()
         super().__init__(prefix=prefix)
         self._registrator: NodeRegistrator = NodeRegistrator(
             self.state,
