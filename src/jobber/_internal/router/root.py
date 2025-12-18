@@ -5,6 +5,9 @@ import functools
 import sys
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast, get_type_hints
 
+from typing_extensions import override
+
+from jobber._internal.configuration import Cron
 from jobber._internal.exceptions import (
     raise_app_already_started_error,
     raise_app_not_started_error,
@@ -106,6 +109,7 @@ class RootRoute(Route[ParamsT, ReturnT]):
             func.__qualname__ = new_qualname
         setattr(module, new_name, func)
 
+    @override
     def schedule(
         self,
         *args: ParamsT.args,
@@ -158,6 +162,7 @@ class RootRegistrator(Registrator[RootRoute[..., Any]]):
             TimeoutMiddleware(),
         ]
 
+    @override
     def register(
         self,
         name: str,
@@ -175,7 +180,7 @@ class RootRegistrator(Registrator[RootRoute[..., Any]]):
             strategy = create_run_strategy(
                 func,
                 self._jobber_config,
-                mode=options.run_mode,
+                mode=options.get("run_mode"),
             )
             route = RootRoute(
                 name=name,
@@ -188,8 +193,11 @@ class RootRegistrator(Registrator[RootRoute[..., Any]]):
             )
             _ = functools.update_wrapper(route, func)
             self._routes[name] = route
-            if options.cron:
-                p = (route, route.name, options.cron)
+
+            if cron := options.get("cron"):
+                if isinstance(cron, str):
+                    cron = Cron(cron)
+                p = (route, route.name, cron)
                 self.state.setdefault(PENDING_CRON_JOBS, []).append(p)
 
         return cast("RootRoute[ParamsT, ReturnT]", self._routes[name])
@@ -224,6 +232,7 @@ class RootRouter(Router):
         )
 
     @property
+    @override
     def task(self) -> RootRegistrator:
         return self._registrator
 
@@ -236,11 +245,13 @@ class RootRouter(Router):
             raise_app_already_started_error("add_exception_handler")
         self.task._exc_handlers[cls_exc] = handler
 
+    @override
     def add_middleware(self, middleware: BaseMiddleware) -> None:
         if self.task._jobber_config.app_started is True:
             raise_app_already_started_error("add_middleware")
         super().add_middleware(middleware)
 
+    @override
     def include_router(self, router: Router) -> None:
         super().include_router(router)
         self._propagate_real_routes(cast("NodeRouter", router))

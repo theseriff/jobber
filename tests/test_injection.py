@@ -1,8 +1,8 @@
-# pyright: reportExplicitAny=false
 from typing import Any, no_type_check
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from typing_extensions import override
 
 from jobber import INJECT, Job, Jobber, JobContext, State
 from jobber._internal.common.constants import EMPTY
@@ -14,7 +14,8 @@ from jobber.middleware import BaseMiddleware, CallNext
 
 
 class _MyMiddleware(BaseMiddleware):
-    async def __call__(self, call_next: CallNext, context: JobContext) -> Any:  # noqa: ANN401
+    @override
+    async def __call__(self, call_next: CallNext, context: JobContext) -> Any:
         context.request_state.test = 1
         return await call_next(context)
 

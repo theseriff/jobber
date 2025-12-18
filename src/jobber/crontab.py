@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Final
 
 from crontab import CronTab as _CronTab
+from typing_extensions import override
 
 from jobber._internal.cron_parser import CronParser
 
@@ -22,6 +23,7 @@ class CronTab(CronParser):
         """
         self._entry: Final = _CronTab(expression)
 
+    @override
     def next_run(self, *, now: datetime) -> datetime:
         """Compute the next scheduled execution time.
 

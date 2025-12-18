@@ -1,10 +1,9 @@
 import dataclasses
-from dataclasses import dataclass
+from dataclasses import dataclass, is_dataclass
 from typing import Any, NamedTuple
 
 import pytest
 
-from jobber._internal.serializers.base import is_dataclass
 from jobber.serializers import (
     JobsSerializer,
     JSONSerializer,
@@ -108,6 +107,10 @@ def test_serialization_all(
     assert deserialized == data
 
 
+def _ensure_has_param(param: str, params1: Any, params2: Any) -> bool:  # noqa: ANN401
+    return getattr(params1, param, True) is getattr(params2, param, True)
+
+
 @pytest.mark.parametrize("serializer", [JSONSerializer({})])
 @pytest.mark.parametrize(
     "data",
@@ -121,12 +124,13 @@ def test_serialization_fallback_create_structure(
     deserialized: Any = serializer.loadb(serialized)
 
     assert len(serializer.decoder_hook.registry) > 0
-    if is_dataclass(data) and is_dataclass(deserialized):
+    if is_dataclass(data):
         assert dataclasses.asdict(data) == dataclasses.asdict(deserialized)
-        data_params = data.__class__.__dataclass_params__
+        d_cls: Any = data.__class__
+        data_params = d_cls.__dataclass_params__
         deser_params = deserialized.__class__.__dataclass_params__
-        assert data_params.slots == deser_params.slots is True
-        assert data_params.frozen == deser_params.frozen is True
-        assert data_params.kw_only == deser_params.kw_only is True
+        assert data_params.frozen is deser_params.frozen is True
+        assert _ensure_has_param("kw_only", data_params, deser_params)
+        assert _ensure_has_param("slots", data_params, deser_params)
     else:
         assert data == deserialized

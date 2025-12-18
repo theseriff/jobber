@@ -52,6 +52,7 @@ classifiers = [
 dependencies = [
     "crontab==1.0.5",
     "tzdata==2025.2; sys_platform == 'win32'",
+    "typing-extensions>=4.12.0",
 ]
 
 [dependency-groups]
@@ -136,10 +137,9 @@ omit = [
 include = ["src", "tests"]
 ignore = ["**/__pycache__", "**/alembic"]
 pythonVersion = "3.10"
-reportImplicitOverride = false
-reportPrivateUsage = false
 reportAny = false
 reportExplicitAny = false
+reportPrivateUsage = false
 
 [tool.mypy]
 mypy_path = "src"

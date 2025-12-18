@@ -4,7 +4,9 @@ import multiprocessing
 import sys
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, TypedDict
+
+from typing_extensions import NotRequired
 
 from jobber._internal.common.constants import INFINITY
 
@@ -80,11 +82,11 @@ class Cron:
             raise ValueError(msg)
 
 
-class RouteOptions(NamedTuple):
-    name: str | None
-    cron: Cron | None
-    retry: int
-    timeout: float | None
-    durable: bool | None
-    run_mode: RunMode | None
-    metadata: Mapping[str, Any] | None
+class RouteOptions(TypedDict):
+    name: NotRequired[str]
+    cron: NotRequired[Cron | str]
+    retry: NotRequired[int]
+    timeout: NotRequired[float]
+    durable: NotRequired[bool]
+    run_mode: NotRequired[RunMode]
+    metadata: NotRequired[Mapping[str, Any]]

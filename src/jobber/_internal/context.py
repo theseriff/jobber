@@ -19,5 +19,5 @@ class JobContext:
     state: State
     request_state: RequestState
     runnable: Runnable[Any]
-    route_config: RouteOptions
+    route_options: RouteOptions
     jobber_config: JobberConfiguration

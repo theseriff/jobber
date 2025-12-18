@@ -1,8 +1,9 @@
-# ruff: noqa: ANN401
 import asyncio
 from typing import Any
 from unittest import mock
 from unittest.mock import call
+
+from typing_extensions import override
 
 from jobber import Jobber, JobContext, JobStatus
 from jobber.middleware import BaseMiddleware, CallNext
@@ -12,6 +13,7 @@ class MyMiddleware(BaseMiddleware):
     def __init__(self) -> None:
         self.skip: bool = False
 
+    @override
     async def __call__(self, call_next: CallNext, context: JobContext) -> Any:
         if self.skip:
             return None

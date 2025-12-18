@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Generic, TypeVar, final
 
+from typing_extensions import override
+
 from jobber._internal.common.constants import EMPTY, JobStatus
 from jobber._internal.exceptions import JobFailedError, JobNotCompletedError
 
@@ -49,6 +51,7 @@ class Job(Generic[ReturnT]):
     def status(self) -> JobStatus:
         return self._status
 
+    @override
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__qualname__}("

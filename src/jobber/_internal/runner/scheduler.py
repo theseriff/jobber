@@ -192,18 +192,16 @@ class ScheduleBuilder(Generic[ReturnT]):
             state=self._state,
             request_state=RequestState(),
             runnable=self._runnable,
-            route_config=self.route_options,
+            route_options=self.route_options,
             jobber_config=self._jobber_config,
         )
         try:
             result = await self._chain_middleware(job_context)
         except JobTimeoutError as exc:
             job.set_exception(exc, status=JobStatus.TIMEOUT)
-            raise
         except Exception as exc:
             logger.exception("Job %s failed with unexpected error", job.id)
             job.set_exception(exc, status=JobStatus.FAILED)
-            raise
         else:
             job.set_result(result, status=JobStatus.SUCCESS)
         finally:
@@ -216,32 +214,29 @@ class ScheduleBuilder(Generic[ReturnT]):
 
     async def _exec_cron(self, ctx: CronContext[ReturnT]) -> None:
         job = ctx.job
-        try:
-            await self._exec_job(job)
-        except Exception:
+        await self._exec_job(job)
+        if job.exception is not None:
             ctx.failure_count += 1
-            raise
         else:
             ctx.failure_count = 0
-        finally:
-            if (
-                job.is_reschedulable()
-                and ctx.is_run_allowed_by_limit()
-                and self._jobber_config.app_started
-            ):
-                if ctx.is_failure_allowed_by_limit():
-                    self._reschedule_cron(ctx)
-                else:
-                    job._status = JobStatus.PERMANENTLY_FAILED
-                    logger.warning(
-                        "Job %s stopped due to max failures policy (%s/%s)",
-                        job.id,
-                        ctx.failure_count,
-                        ctx.cron.max_failures,
-                    )
-                    _ = self._shared_state.pending_jobs.pop(job.id, None)
+        if (
+            job.is_reschedulable()
+            and ctx.is_run_allowed_by_limit()
+            and self._jobber_config.app_started
+        ):
+            if ctx.is_failure_allowed_by_limit():
+                self._reschedule_cron(ctx)
             else:
+                job._status = JobStatus.PERMANENTLY_FAILED
+                logger.warning(
+                    "Job %s stopped due to max failures policy (%s/%s)",
+                    job.id,
+                    ctx.failure_count,
+                    ctx.cron.max_failures,
+                )
                 _ = self._shared_state.pending_jobs.pop(job.id, None)
+        else:
+            _ = self._shared_state.pending_jobs.pop(job.id, None)
 
     def _reschedule_cron(self, ctx: CronContext[ReturnT]) -> None:
         now = self._now()

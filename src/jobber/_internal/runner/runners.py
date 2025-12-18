@@ -7,6 +7,8 @@ from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Final, Generic, ParamSpec, TypeVar, final
 
+from typing_extensions import override
+
 from jobber._internal.common.constants import RunMode
 
 if TYPE_CHECKING:
@@ -36,6 +38,7 @@ class RunStrategy(ABC, Generic[ParamsT, ReturnT]):
 
 
 class SyncStrategy(RunStrategy[ParamsT, ReturnT]):
+    @override
     async def __call__(
         self,
         *args: ParamsT.args,
@@ -45,6 +48,7 @@ class SyncStrategy(RunStrategy[ParamsT, ReturnT]):
 
 
 class AsyncStrategy(RunStrategy[ParamsT, ReturnT]):
+    @override
     async def __call__(
         self: AsyncStrategy[ParamsT, Awaitable[ReturnT]],
         *args: ParamsT.args,
@@ -66,6 +70,7 @@ class PoolStrategy(RunStrategy[ParamsT, ReturnT]):
         self.executor: Executor | None = executor
         self.loop_factory: LoopFactory = loop_factory
 
+    @override
     async def __call__(
         self,
         *args: ParamsT.args,

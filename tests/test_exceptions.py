@@ -67,7 +67,7 @@ async def test_job_timeout() -> None:
     def f2() -> None:
         time.sleep(0.01)
 
-    @jobber.task(timeout=None)
+    @jobber.task
     async def f3() -> str:
         return "test"
 

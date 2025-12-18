@@ -4,6 +4,8 @@ import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from typing import TYPE_CHECKING, Any, TypeAlias, final
 
+from typing_extensions import override
+
 from jobber._internal.context import JobContext
 from jobber._internal.middleware.base import BaseMiddleware, CallNext
 
@@ -32,7 +34,8 @@ class ExceptionMiddleware(BaseMiddleware):
         self.exc_handlers = exc_handlers
         self.jobber_config = jobber_config
 
-    async def __call__(self, call_next: CallNext, context: JobContext) -> Any:  # noqa: ANN401
+    @override
+    async def __call__(self, call_next: CallNext, context: JobContext) -> Any:
         try:
             return await call_next(context)
         except Exception as exc:

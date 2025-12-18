@@ -6,6 +6,8 @@ import asyncio
 from typing import TYPE_CHECKING, Literal, TypeVar
 from zoneinfo import ZoneInfo
 
+from typing_extensions import Self
+
 from jobber._internal.configuration import JobberConfiguration, WorkerPools
 from jobber._internal.router.root import RootRouter
 from jobber._internal.serializers.json import JSONSerializer
@@ -117,7 +119,7 @@ class Jobber(RootRouter):
         async def target() -> None:
             while jobs := self.task._shared_state.pending_jobs.values():
                 coros = (job.wait() for job in jobs)
-                _ = await asyncio.gather(*coros)
+                _ = await asyncio.gather(*coros, return_exceptions=True)
 
         await asyncio.wait_for(target(), timeout=timeout)
 
@@ -171,7 +173,7 @@ class Jobber(RootRouter):
         self.jobber_config.close()
         await self._propagate_shutdown()
 
-    async def __aenter__(self) -> Jobber:
+    async def __aenter__(self) -> Self:
         """Enter the Jobber context manager.
 
         Returns:
