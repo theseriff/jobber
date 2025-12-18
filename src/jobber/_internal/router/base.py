@@ -36,11 +36,11 @@ if TYPE_CHECKING:
     from jobber._internal.runner.scheduler import ScheduleBuilder
 
 
-ParamsT = ParamSpec("ParamsT")
+T_co = TypeVar("T_co", covariant=True)
 Return_co = TypeVar("Return_co", covariant=True)
+ParamsT = ParamSpec("ParamsT")
 Route_co = TypeVar("Route_co", bound="Route[..., Any]", covariant=True)
 Router_co = TypeVar("Router_co", bound="Router", covariant=True)
-T_co = TypeVar("T_co", covariant=True)
 
 
 class Route(ABC, Generic[ParamsT, Return_co]):
@@ -145,7 +145,7 @@ class Registrator(ABC, Generic[Route_co]):
         self,
         *,
         retry: int = 0,
-        timeout: float = 600,
+        timeout: float | None = 600,
         run_mode: RunMode | None = None,
         name: str | None = None,
         cron: str | Cron | None = None,
@@ -161,7 +161,7 @@ class Registrator(ABC, Generic[Route_co]):
         func: Callable[ParamsT, Return_co],
         *,
         retry: int = 0,
-        timeout: float = 600,
+        timeout: float | None = 600,
         run_mode: RunMode | None = None,
         name: str | None = None,
         cron: str | Cron | None = None,
@@ -174,7 +174,7 @@ class Registrator(ABC, Generic[Route_co]):
         func: Callable[ParamsT, Return_co] | None = None,
         *,
         retry: int = 0,
-        timeout: float = 600,  # default 10 min.
+        timeout: float | None = 600,  # default 10 min.
         run_mode: RunMode | None = None,
         name: str | None = None,
         cron: str | Cron | None = None,

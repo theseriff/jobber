@@ -37,16 +37,17 @@ class ExceptionMiddleware(BaseMiddleware):
             return await call_next(context)
         except Exception as exc:
             handler = self._lookup_exc_handler(exc)
-            if asyncio.iscoroutinefunction(handler):
-                await handler(context, exc)
-            else:
-                loop = self.jobber_config.loop
-                thread = self.jobber_config.worker_pools.threadpool
-                _ = await loop.run_in_executor(thread, handler, context, exc)
+            if handler:
+                if asyncio.iscoroutinefunction(handler):
+                    await handler(context, exc)
+                else:
+                    loop = self.jobber_config.loop
+                    thread = self.jobber_config.worker_pools.threadpool
+                    await loop.run_in_executor(thread, handler, context, exc)  # pyright: ignore[reportUnusedCallResult]
             raise
 
-    def _lookup_exc_handler(self, exc: Exception) -> ExceptionHandler:
+    def _lookup_exc_handler(self, exc: Exception) -> ExceptionHandler | None:
         for cls_exc in type(exc).__mro__:
             if handler := self.exc_handlers.get(cls_exc):
                 return handler
-        raise exc
+        return None

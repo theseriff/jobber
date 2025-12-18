@@ -1,5 +1,5 @@
 # pyright: reportExplicitAny=false
-from typing import Any
+from typing import Any, no_type_check
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -57,7 +57,8 @@ async def test_injection_wrong_usage() -> None:
     jobber = Jobber()
 
     @jobber.task
-    async def untyped_func(_job=INJECT) -> None:  # type: ignore[no-untyped-def] # pyright: ignore[reportMissingParameterType]  # noqa: ANN001
+    @no_type_check
+    async def untyped_func(_job=INJECT) -> None:  # noqa: ANN001
         pass
 
     @jobber.task

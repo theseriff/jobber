@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from jobber._internal.common.constants import RunMode
     from jobber._internal.common.types import LoopFactory
     from jobber._internal.cron_parser import CronFactory
-    from jobber._internal.runner.job import Job
     from jobber._internal.serializers.base import JobsSerializer
     from jobber._internal.storage.abc import JobRepository
 
@@ -55,8 +54,6 @@ class JobberConfiguration:
     cron_factory: CronFactory
     app_started: bool = False
     _loop: asyncio.AbstractEventLoop | None = None
-    _pending_jobs: dict[str, Job[Any]]
-    _pending_tasks: set[asyncio.Task[Any]]
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -87,7 +84,7 @@ class RouteOptions(NamedTuple):
     name: str | None
     cron: Cron | None
     retry: int
-    timeout: float
+    timeout: float | None
     durable: bool | None
     run_mode: RunMode | None
     metadata: Mapping[str, Any] | None

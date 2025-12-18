@@ -4,6 +4,7 @@ import base64
 import dataclasses
 from abc import ABCMeta, abstractmethod
 from collections import namedtuple
+from collections.abc import Callable
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -29,7 +30,6 @@ SerializableTypes: TypeAlias = (
     | tuple["SerializableTypes", ...]
     | dict[str, "SerializableTypes"]
 )
-
 JsonCompat: TypeAlias = (
     dict[str, "JsonCompat"]
     | list["JsonCompat"]
@@ -39,6 +39,7 @@ JsonCompat: TypeAlias = (
     | bool
     | None
 )
+TypeRegistry: TypeAlias = dict[str, Callable[..., SerializableTypes]]
 
 
 class JobsSerializer(Protocol, metaclass=ABCMeta):
@@ -75,7 +76,6 @@ def json_extended_encoder(o: SerializableTypes) -> JsonCompat:  # noqa: PLR0911
             params = {
                 field: getattr(params, field) for field in _DATACLASS_PARAMS
             }
-
         return {
             "__dataclass__": {
                 "type": o.__class__.__name__,
@@ -109,31 +109,37 @@ def json_extended_encoder(o: SerializableTypes) -> JsonCompat:  # noqa: PLR0911
     return o
 
 
-def json_extended_decoder(dct: dict[str, Any]) -> SerializableTypes:
-    if "__dataclass__" in dct:
-        data = dct["__dataclass__"]
-        params = data["params"]
-        type_name = data["type"]
-        fields_data = data["fields"]
-        dc_cls = dataclasses.make_dataclass(
-            type_name,
-            fields_data.keys(),
-            **params,
-        )
-        r: SerializableTypes = dc_cls(**fields_data)
-        return r
+class JsonDecoderHook:
+    def __init__(self, registry: TypeRegistry) -> None:
+        self.registry: TypeRegistry = registry
 
-    if "__namedtuple__" in dct:
-        data = dct["__namedtuple__"]
-        type_name = data["type"]
-        fields = data["fields"]
-        nt_cls = namedtuple(type_name, fields.keys())  # type:ignore[misc]  # noqa: PYI024 # pyright: ignore[reportUntypedNamedTuple]
-        return nt_cls(**fields)
+    def __call__(self, dct: dict[str, Any]) -> SerializableTypes:  # noqa: PLR0911
+        if "__dataclass__" in dct:
+            data = dct["__dataclass__"]
+            fields = data["fields"]
+            type_name = data["type"]
+            if cls := self.registry.get(type_name):
+                return cls(**fields)
+            dc_cls = dataclasses.make_dataclass(
+                type_name,
+                fields.keys(),
+                **data["params"],
+            )
+            return self.registry.setdefault(type_name, dc_cls)(**fields)
 
-    if "__bytes__" in dct:
-        return base64.b64decode(dct["__bytes__"])
-    if "__tuple__" in dct:
-        return tuple(dct["__tuple__"])
-    if "__set__" in dct:
-        return set(dct["__set__"])
-    return dct
+        if "__namedtuple__" in dct:
+            data = dct["__namedtuple__"]
+            fields = data["fields"]
+            type_name = data["type"]
+            if cls := self.registry.get(type_name):
+                return cls(**fields)
+            nt_cls = namedtuple(type_name, fields.keys())  # type:ignore[misc]  # noqa: PYI024 # pyright: ignore[reportUntypedNamedTuple]
+            return self.registry.setdefault(type_name, nt_cls)(**fields)
+
+        if "__bytes__" in dct:
+            return base64.b64decode(dct["__bytes__"])
+        if "__tuple__" in dct:
+            return tuple(dct["__tuple__"])
+        if "__set__" in dct:
+            return set(dct["__set__"])
+        return dct

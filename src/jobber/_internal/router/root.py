@@ -17,6 +17,7 @@ from jobber._internal.middleware.timeout import TimeoutMiddleware
 from jobber._internal.router.base import Registrator, Route, Router
 from jobber._internal.runner.runners import Runnable, create_run_strategy
 from jobber._internal.runner.scheduler import ScheduleBuilder
+from jobber._internal.type_registry import collect_structured_types
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     )
     from jobber._internal.router.node import NodeRouter
     from jobber._internal.runner.runners import RunStrategy
+    from jobber._internal.shared_state import SharedState
 
 
 ReturnT = TypeVar("ReturnT")
@@ -51,16 +53,16 @@ class RootRoute(Route[ParamsT, ReturnT]):
         *,
         name: str,
         func: Callable[ParamsT, ReturnT],
-        return_type: type[ReturnT] | None,
         state: State,
         options: RouteOptions,
         strategy: RunStrategy[ParamsT, ReturnT],
+        shared_state: SharedState,
         jobber_config: JobberConfiguration,
     ) -> None:
         super().__init__(name, func, options)
         self._run_strategy: RunStrategy[ParamsT, ReturnT] = strategy
-        self._return_type: type[ReturnT] | None = return_type
         self._chain_middleware: CallNext | None = None
+        self._shared_state: SharedState = shared_state
         self.jobber_config: JobberConfiguration = jobber_config
         self.state: State = state
 
@@ -129,6 +131,7 @@ class RootRoute(Route[ParamsT, ReturnT]):
             state=self.state,
             options=self.options,
             name=self.name,
+            shared_state=self._shared_state,
             jobber_config=self.jobber_config,
             chain_middleware=self._chain_middleware,
             runnable=runnable,
@@ -136,24 +139,24 @@ class RootRoute(Route[ParamsT, ReturnT]):
 
 
 class RootRegistrator(Registrator[RootRoute[..., Any]]):
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         state: State,
         lifespan: Lifespan[RootRouter_co] | None,
         middleware: Sequence[BaseMiddleware] | None,
+        shared_state: SharedState,
         jobber_config: JobberConfiguration,
         exception_handlers: MappingExceptionHandlers | None,
     ) -> None:
         super().__init__(state, lifespan, middleware)
+        self._shared_state: SharedState = shared_state
         self._exc_handlers: ExceptionHandlers = dict(exception_handlers or {})
-        self.jobber_config: JobberConfiguration = jobber_config
-
-        for system_middleware in (
-            TimeoutMiddleware(),
+        self._jobber_config: JobberConfiguration = jobber_config
+        self._system_middleware: list[BaseMiddleware] = [
+            ExceptionMiddleware(self._exc_handlers, jobber_config),
             RetryMiddleware(),
-            ExceptionMiddleware(self._exc_handlers, self.jobber_config),
-        ):
-            self._middleware.insert(0, system_middleware)
+            TimeoutMiddleware(),
+        ]
 
     def register(
         self,
@@ -161,23 +164,27 @@ class RootRegistrator(Registrator[RootRoute[..., Any]]):
         func: Callable[ParamsT, ReturnT],
         options: RouteOptions,
     ) -> RootRoute[ParamsT, ReturnT]:
-        if self.jobber_config.app_started is True:
+        if self._jobber_config.app_started is True:
             raise_app_already_started_error("register")
 
         if self._routes.get(name) is None:
+            _ = collect_structured_types(
+                get_type_hints(func).values(),
+                self._shared_state.type_registry,
+            )
             strategy = create_run_strategy(
                 func,
-                self.jobber_config,
+                self._jobber_config,
                 mode=options.run_mode,
             )
             route = RootRoute(
                 name=name,
                 func=func,
-                return_type=get_type_hints(func).get("return"),
                 state=self.state,
                 options=options,
                 strategy=strategy,
-                jobber_config=self.jobber_config,
+                shared_state=self._shared_state,
+                jobber_config=self._jobber_config,
             )
             _ = functools.update_wrapper(route, func)
             self._routes[name] = route
@@ -202,6 +209,7 @@ class RootRouter(Router):
         *,
         lifespan: Lifespan[RootRouter_co] | None,
         middleware: Sequence[BaseMiddleware] | None,
+        shared_state: SharedState,
         jobber_config: JobberConfiguration,
         exception_handlers: MappingExceptionHandlers | None,
     ) -> None:
@@ -210,6 +218,7 @@ class RootRouter(Router):
             self.state,
             lifespan,
             middleware,
+            shared_state,
             jobber_config,
             exception_handlers,
         )
@@ -223,12 +232,12 @@ class RootRouter(Router):
         cls_exc: type[Exception],
         handler: ExceptionHandler,
     ) -> None:
-        if self.task.jobber_config.app_started is True:
+        if self.task._jobber_config.app_started is True:
             raise_app_already_started_error("add_exception_handler")
         self.task._exc_handlers[cls_exc] = handler
 
     def add_middleware(self, middleware: BaseMiddleware) -> None:
-        if self.task.jobber_config.app_started is True:
+        if self.task._jobber_config.app_started is True:
             raise_app_already_started_error("add_middleware")
         super().add_middleware(middleware)
 
@@ -257,7 +266,11 @@ class RootRouter(Router):
     async def _propagate_startup(self, router: Router) -> None:
         await router.task.emit_startup()
 
-        chain = build_middleware(router.task._middleware, self._entry)
+        final_middleware = [
+            *router.task._middleware,
+            *self.task._system_middleware,
+        ]
+        chain = build_middleware(final_middleware, self._entry)
         for route in cast("Iterator[RootRoute[..., Any]]", router.routes):
             route.state = router.task.state
             route._chain_middleware = chain

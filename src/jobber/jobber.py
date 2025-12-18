@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from jobber._internal.configuration import JobberConfiguration, WorkerPools
 from jobber._internal.router.root import RootRouter
 from jobber._internal.serializers.json import JSONSerializer
+from jobber._internal.shared_state import SharedState
 from jobber._internal.storage.dummy import DummyRepository
 from jobber._internal.storage.sqlite import SQLiteJobRepository
 from jobber.crontab import create_crontab
@@ -52,10 +53,14 @@ class Jobber(RootRouter):
         cron_factory: CronFactory | None = None,
     ) -> None:
         """Initialize a `Jobber` instance."""
+        shared_state = SharedState()
+
         if durable is False:
             durable = DummyRepository()
         elif durable is None:
             durable = SQLiteJobRepository()
+        if serializer is None:
+            serializer = JSONSerializer(shared_state.type_registry)
 
         self.jobber_config: JobberConfiguration = JobberConfiguration(
             loop_factory=loop_factory,
@@ -65,15 +70,13 @@ class Jobber(RootRouter):
                 _processpool=processpool_executor,
                 threadpool=threadpool_executor,
             ),
-            serializer=serializer or JSONSerializer(),
+            serializer=serializer,
             cron_factory=cron_factory or create_crontab,
-            _pending_tasks=set(),
-            _pending_jobs={},
         )
-
         super().__init__(
             lifespan=lifespan,
             middleware=middleware,
+            shared_state=shared_state,
             jobber_config=self.jobber_config,
             exception_handlers=exception_handlers,
         )
@@ -112,7 +115,7 @@ class Jobber(RootRouter):
         """
 
         async def target() -> None:
-            while jobs := self.jobber_config._pending_jobs.values():
+            while jobs := self.task._shared_state.pending_jobs.values():
                 coros = (job.wait() for job in jobs)
                 _ = await asyncio.gather(*coros)
 
@@ -155,13 +158,13 @@ class Jobber(RootRouter):
         """
         self.jobber_config.app_started = False
 
-        if tasks := self.jobber_config._pending_tasks:
+        if tasks := self.task._shared_state.pending_tasks:
             for task in tuple(tasks):
                 _ = task.cancel()
             _ = await asyncio.gather(*tasks, return_exceptions=True)
             tasks.clear()
 
-        if jobs := tuple(self.jobber_config._pending_jobs.values()):
+        if jobs := tuple(self.task._shared_state.pending_jobs.values()):
             for job in jobs:
                 job._cancel()
 

@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from itertools import count
-from typing import TYPE_CHECKING, Generic, TypeVar, final
+from typing import TYPE_CHECKING, Generic, TypeVar
 from uuid import uuid4
 
 from jobber._internal.common.constants import INFINITY, JobStatus
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from jobber._internal.cron_parser import CronParser
     from jobber._internal.middleware.base import CallNext
     from jobber._internal.runner.runners import Runnable
+    from jobber._internal.shared_state import SharedState
 
 
 logger = logging.getLogger("jobber.runner")
@@ -48,12 +49,12 @@ class CronContext(Generic[ReturnT]):
         return self.failure_count < self.cron.max_failures
 
 
-@final
 class ScheduleBuilder(Generic[ReturnT]):
     __slots__: tuple[str, ...] = (
         "_chain_middleware",
         "_jobber_config",
         "_runnable",
+        "_shared_state",
         "_state",
         "name",
         "route_options",
@@ -63,21 +64,23 @@ class ScheduleBuilder(Generic[ReturnT]):
         self,
         *,
         state: State,
+        shared_state: SharedState,
         jobber_config: JobberConfiguration,
         runnable: Runnable[ReturnT],
         chain_middleware: CallNext,
         options: RouteOptions,
         name: str,
     ) -> None:
-        self._state = state
-        self._jobber_config = jobber_config
-        self._runnable = runnable
-        self._chain_middleware = chain_middleware
-        self.name = name
-        self.route_options = options
+        self._state: State = state
+        self._shared_state: SharedState = shared_state
+        self._jobber_config: JobberConfiguration = jobber_config
+        self._runnable: Runnable[ReturnT] = runnable
+        self._chain_middleware: CallNext = chain_middleware
+        self.name: str = name
+        self.route_options: RouteOptions = options
 
     def _validate_job_id(self, job_id: str) -> None:
-        if job_id in self._jobber_config._pending_jobs:
+        if job_id in self._shared_state.pending_jobs:
             raise DuplicateJobError(job_id)
 
     def _now(self) -> datetime:
@@ -106,7 +109,7 @@ class ScheduleBuilder(Generic[ReturnT]):
         job = Job(
             exec_at=at,
             job_id=job_id,
-            pending_jobs=self._jobber_config._pending_jobs,
+            pending_jobs=self._shared_state.pending_jobs,
             cron_expression=cron.expression,
         )
         cron_ctx = CronContext(job=job, cron=cron, cron_parser=cron_parser)
@@ -115,7 +118,7 @@ class ScheduleBuilder(Generic[ReturnT]):
         when = loop.time() + delay_seconds
         time_handler = loop.call_at(when, self._pre_exec_cron, cron_ctx)
         job._timer_handler = time_handler
-        self._jobber_config._pending_jobs[job.id] = job
+        self._shared_state.pending_jobs[job.id] = job
         return job
 
     async def delay(
@@ -159,19 +162,19 @@ class ScheduleBuilder(Generic[ReturnT]):
         job = Job(
             exec_at=at,
             job_id=job_id,
-            pending_jobs=self._jobber_config._pending_jobs,
+            pending_jobs=self._shared_state.pending_jobs,
         )
         loop = self._jobber_config.loop
         delay_seconds = self._calculate_delay_seconds(now=now, at=at)
         when = loop.time() + delay_seconds
         time_handler = loop.call_at(when, self._pre_exec_job, job)
         job._timer_handler = time_handler
-        self._jobber_config._pending_jobs[job.id] = job
+        self._shared_state.pending_jobs[job.id] = job
         return job
 
     def _pre_exec_job(self, job: Job[ReturnT]) -> None:
         task = asyncio.create_task(self._exec_job(job), name=job.id)
-        self._jobber_config._pending_tasks.add(task)
+        self._shared_state.pending_tasks.add(task)
         task.add_done_callback(functools.partial(self._post_exec_job, job))
 
     def _post_exec_job(
@@ -179,8 +182,8 @@ class ScheduleBuilder(Generic[ReturnT]):
         job: Job[ReturnT],
         task: asyncio.Task[None],
     ) -> None:
-        self._jobber_config._pending_tasks.discard(task)
-        _ = self._jobber_config._pending_jobs.pop(job.id, None)
+        self._shared_state.pending_tasks.discard(task)
+        _ = self._shared_state.pending_jobs.pop(job.id, None)
 
     async def _exec_job(self, job: Job[ReturnT]) -> None:
         job._status = JobStatus.RUNNING
@@ -208,8 +211,8 @@ class ScheduleBuilder(Generic[ReturnT]):
 
     def _pre_exec_cron(self, ctx: CronContext[ReturnT]) -> None:
         task = asyncio.create_task(self._exec_cron(ctx=ctx), name=ctx.job.id)
-        self._jobber_config._pending_tasks.add(task)
-        task.add_done_callback(self._jobber_config._pending_tasks.discard)
+        self._shared_state.pending_tasks.add(task)
+        task.add_done_callback(self._shared_state.pending_tasks.discard)
 
     async def _exec_cron(self, ctx: CronContext[ReturnT]) -> None:
         job = ctx.job
@@ -236,9 +239,9 @@ class ScheduleBuilder(Generic[ReturnT]):
                         ctx.failure_count,
                         ctx.cron.max_failures,
                     )
-                    _ = self._jobber_config._pending_jobs.pop(job.id, None)
+                    _ = self._shared_state.pending_jobs.pop(job.id, None)
             else:
-                _ = self._jobber_config._pending_jobs.pop(job.id, None)
+                _ = self._shared_state.pending_jobs.pop(job.id, None)
 
     def _reschedule_cron(self, ctx: CronContext[ReturnT]) -> None:
         now = self._now()

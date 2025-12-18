@@ -75,7 +75,7 @@ async def test_cron_declarative() -> None:
         return "ok"
 
     async with jobber:
-        job = jobber.jobber_config._pending_jobs.popitem()[1]
+        job = jobber.task._shared_state.pending_jobs.popitem()[1]
         await job.wait()
 
     assert job.result() == "ok"
@@ -90,10 +90,10 @@ async def test_cron_shutdown_graceful() -> None:
 
     async with jobber:
         await asyncio.sleep(0.001)
-        task = jobber.jobber_config._pending_tasks.pop()
+        task = jobber.task._shared_state.pending_tasks.pop()
         _is_cancelled = task.cancel()
 
     with pytest.raises(asyncio.CancelledError):
         await task
 
-    assert len(jobber.jobber_config._pending_jobs) == 0
+    assert len(jobber.task._shared_state.pending_jobs) == 0

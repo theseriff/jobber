@@ -20,8 +20,8 @@ Security Notes:
 
 from jobber._internal.serializers.base import (
     JobsSerializer,
+    JsonDecoderHook,
     SerializableTypes,
-    json_extended_decoder,
     json_extended_encoder,
 )
 from jobber._internal.serializers.json import JSONSerializer
@@ -30,8 +30,8 @@ from jobber._internal.serializers.pickle_unsafe import UnsafePickleSerializer
 __all__ = (
     "JSONSerializer",
     "JobsSerializer",
+    "JsonDecoderHook",
     "SerializableTypes",
     "UnsafePickleSerializer",
-    "json_extended_decoder",
     "json_extended_encoder",
 )

@@ -1,5 +1,5 @@
 import dataclasses
-from dataclasses import dataclass
+from dataclasses import dataclass, is_dataclass
 from typing import Any, NamedTuple
 
 import pytest
@@ -23,25 +23,60 @@ class NestedData(NamedTuple):
     data: SimpleData
 
 
-@dataclass(slots=True, kw_only=True, frozen=True, eq=False)
+@dataclass(slots=True, kw_only=True, frozen=True)
 class PointDC:
     x: int
     y: int
     label: str | None = None
 
 
-@dataclass(slots=True, kw_only=True, frozen=True, eq=False)
+@dataclass(slots=True, kw_only=True, frozen=True)
 class ComplexDC:
     id: int
     raw_data: bytes
     point: PointDC
 
 
+type_registry: dict[str, Any] = {
+    "SimpleData": SimpleData,
+    "NestedData": NestedData,
+    "PointDC": PointDC,
+    "ComplexDC": ComplexDC,
+}
+named_tuple_structures = (
+    pytest.param(
+        SimpleData(id=1, name="TestA", value=b"10.5"),
+        id="SimpleNamedTuple",
+    ),
+    pytest.param(
+        NestedData(
+            key="K1",
+            data=SimpleData(id=2, name="TestB", value=b""),
+        ),
+        id="NestedNamedTuple",
+    ),
+    pytest.param(
+        (SimpleData(id=3, name="InTuple", value=b"1"), "other_data"),
+        id="TupleContainingNamedTuple",
+    ),
+)
+dataclass_structures = (
+    pytest.param(
+        PointDC(x=10, y=20, label="origin"),
+        id="SimpleDataclass",
+    ),
+    pytest.param(
+        ComplexDC(id=99, raw_data=b"binary", point=PointDC(x=1, y=2)),
+        id="NestedDataclassWithBytes",
+    ),
+)
+
+
 @pytest.mark.parametrize(
     "serializer",
     [
-        pytest.param(UnsafePickleSerializer()),
-        pytest.param(JSONSerializer()),
+        pytest.param(UnsafePickleSerializer(), id="pickle"),
+        pytest.param(JSONSerializer(type_registry), id="json"),
     ],
 )
 @pytest.mark.parametrize(
@@ -58,21 +93,8 @@ class ComplexDC:
         pytest.param((1, "a", None, (2, "b", True))),
         pytest.param({"a": 1, "b": None}),
         pytest.param({1, "a", None}),
-        pytest.param(
-            SimpleData(id=1, name="TestA", value=b"10.5"),
-            id="SimpleNamedTuple",
-        ),
-        pytest.param(
-            NestedData(
-                key="K1",
-                data=SimpleData(id=2, name="TestB", value=b""),
-            ),
-            id="NestedNamedTuple",
-        ),
-        pytest.param(
-            (SimpleData(id=3, name="InTuple", value=b"1"), "other_data"),
-            id="TupleContainingNamedTuple",
-        ),
+        *named_tuple_structures,
+        *dataclass_structures,
     ],
 )
 def test_serialization_all(
@@ -89,34 +111,26 @@ def test_serialization_all(
     "serializer",
     [
         pytest.param(UnsafePickleSerializer()),
-        pytest.param(JSONSerializer()),
+        pytest.param(JSONSerializer({})),
     ],
 )
 @pytest.mark.parametrize(
     "data",
-    [
-        pytest.param(
-            PointDC(x=10, y=20, label="origin"),
-            id="SimpleDataclass",
-        ),
-        pytest.param(
-            ComplexDC(id=99, raw_data=b"binary", point=PointDC(x=1, y=2)),
-            id="NestedDataclassWithBytes",
-        ),
-    ],
+    [*dataclass_structures, *named_tuple_structures],
 )
-def test_serialization_dataclass(
+def test_serialization_fallback_create_structure(
     serializer: JobsSerializer,
     data: Any,  # noqa: ANN401
 ) -> None:
     serialized = serializer.dumpb(data)
     deserialized: Any = serializer.loadb(serialized)
+    if bool(is_dataclass(data)):
+        assert dataclasses.asdict(data) == dataclasses.asdict(deserialized)
 
-    data_params = data.__class__.__dataclass_params__
-    deser_params = deserialized.__class__.__dataclass_params__
-
-    assert dataclasses.asdict(data) == dataclasses.asdict(deserialized)
-    assert data_params.slots == deser_params.slots is True
-    assert data_params.frozen == deser_params.frozen is True
-    assert data_params.kw_only == deser_params.kw_only is True
-    assert data_params.eq == deser_params.eq is False
+        data_params = data.__class__.__dataclass_params__
+        deser_params = deserialized.__class__.__dataclass_params__
+        assert data_params.slots == deser_params.slots is True
+        assert data_params.frozen == deser_params.frozen is True
+        assert data_params.kw_only == deser_params.kw_only is True
+    else:
+        assert data == deserialized

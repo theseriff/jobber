@@ -2,8 +2,9 @@ import json
 
 from jobber._internal.serializers.base import (
     JobsSerializer,
+    JsonDecoderHook,
     SerializableTypes,
-    json_extended_decoder,
+    TypeRegistry,
     json_extended_encoder,
 )
 
@@ -15,12 +16,15 @@ class ExtendedEncoder(json.JSONEncoder):
 
 
 class JSONSerializer(JobsSerializer):
+    def __init__(self, registry: TypeRegistry) -> None:
+        self.decoder_hook: JsonDecoderHook = JsonDecoderHook(registry)
+
     def dumpb(self, data: SerializableTypes) -> bytes:
         return json.dumps(data, cls=ExtendedEncoder).encode("utf-8")
 
     def loadb(self, data: bytes) -> SerializableTypes:
         decoded: SerializableTypes = json.loads(
             data,
-            object_hook=json_extended_decoder,
+            object_hook=self.decoder_hook,
         )
         return decoded

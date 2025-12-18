@@ -134,7 +134,7 @@ class Runnable(Generic[ReturnT]):
         *args: ParamsT.args,
         **kwargs: ParamsT.kwargs,
     ) -> None:
-        self.strategy = strategy
+        self.strategy: Final = strategy
         self.args = args
         self.kwargs = kwargs
         self.raw_args = raw_args
