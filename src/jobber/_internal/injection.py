@@ -20,8 +20,7 @@ CONTEXT_TYPE_MAP = _build_context_mapping(JobContext)
 
 
 def inject_context(runnable: Runnable[ReturnT], context: JobContext) -> None:
-    sig = inspect.signature(runnable.strategy.func)
-    for name, param in sig.parameters.items():
+    for name, param in context.func_spec.signature.parameters.items():
         if param.default is not INJECT:
             continue
 

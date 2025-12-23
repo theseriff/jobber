@@ -1,9 +1,17 @@
 from typing_extensions import override
 
-from jobber._internal.storage.abc import JobRepository, JobStored
+from jobber._internal.storage.abc import ScheduledJob, ScheduleRepository
 
 
-class DummyRepository(JobRepository):
+class DummyRepository(ScheduleRepository):
     @override
-    def load_all(self) -> list[JobStored]:
+    async def all(self) -> list[ScheduledJob]:
         return []
+
+    @override
+    async def add(self, scheduled: ScheduledJob) -> None:
+        pass
+
+    @override
+    async def delete(self, job_id: str) -> None:
+        pass

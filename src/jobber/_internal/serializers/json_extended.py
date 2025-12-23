@@ -62,7 +62,10 @@ def is_structured_type(tp: Any) -> bool:  # noqa: ANN401
     return (
         dataclasses.is_dataclass(tp)
         or is_named_tuple_type(tp)
-        or dataclasses.is_dataclass(getattr(tp, "__origin__", False))
+        or (
+            hasattr(tp, "__origin__")
+            and dataclasses.is_dataclass(tp.__origin__)
+        )
     )
 
 

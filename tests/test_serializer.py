@@ -54,24 +54,6 @@ type_registry: dict[str, Any] = {
     "EnumTest": EnumTest,
 }
 
-T = TypeVar("T")
-
-
-@dataclass(slots=True, kw_only=True, frozen=True)
-class JobContext:  # This will trigger the JobContext check
-    task_id: str
-
-
-@dataclass(slots=True, kw_only=True, frozen=True)
-class GenericComplexDC(Generic[T]):  # This will trigger the get_args check
-    id: int
-    data: T  # This will be the generic part
-
-
-@dataclass(slots=True, kw_only=True, frozen=True)
-class SimpleType:  # A simple dataclass to be registered
-    name: str
-
 
 named_tuple_structures = (
     pytest.param(
@@ -172,6 +154,25 @@ def test_serialization_simple(
     serialized = serializer.dumpb(data)
     deserialized = serializer.loadb(serialized)
     assert deserialized == data
+
+
+T = TypeVar("T")
+
+
+@dataclass(slots=True, kw_only=True, frozen=True)
+class JobContext:  # This will trigger the JobContext check
+    task_id: str
+
+
+@dataclass(slots=True, kw_only=True, frozen=True)
+class GenericComplexDC(Generic[T]):  # This will trigger the get_args check
+    id: int
+    data: T  # This will be the generic part
+
+
+@dataclass(slots=True, kw_only=True, frozen=True)
+class SimpleType:  # A simple dataclass to be registered
+    name: str
 
 
 def test_registry_types_coverage() -> None:

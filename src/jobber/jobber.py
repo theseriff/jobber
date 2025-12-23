@@ -14,7 +14,7 @@ from jobber._internal.serializers.json import JSONSerializer
 from jobber._internal.serializers.json_extended import ExtendedJSONSerializer
 from jobber._internal.shared_state import SharedState
 from jobber._internal.storage.dummy import DummyRepository
-from jobber._internal.storage.sqlite import SQLiteJobRepository
+from jobber._internal.storage.sqlite import SQLiteSchedule
 from jobber._internal.typeadapter.dummy import DummyDumper, DummyLoader
 from jobber.crontab import create_crontab
 
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from jobber._internal.middleware.base import BaseMiddleware
     from jobber._internal.middleware.exceptions import MappingExceptionHandlers
     from jobber._internal.serializers.base import JobsSerializer
-    from jobber._internal.storage.abc import JobRepository
+    from jobber._internal.storage.abc import ScheduleRepository
     from jobber._internal.typeadapter.base import Dumper, Loader
 
 
@@ -48,7 +48,7 @@ class Jobber(RootRouter):
         *,
         tz: ZoneInfo | None = None,
         loop_factory: LoopFactory = lambda: asyncio.get_running_loop(),
-        durable: JobRepository | Literal[False] | None = None,
+        durable: ScheduleRepository | Literal[False] | None = None,
         lifespan: Lifespan[AppT] | None = None,
         dumper: Dumper | None = None,
         loader: Loader | None = None,
@@ -63,7 +63,7 @@ class Jobber(RootRouter):
         if durable is False:
             durable = DummyRepository()
         elif durable is None:
-            durable = SQLiteJobRepository()
+            durable = SQLiteSchedule()
 
         if serializer is None:
             serializer = (
@@ -78,14 +78,16 @@ class Jobber(RootRouter):
             loader = DummyLoader()
 
         self.jobber_config: JobberConfiguration = JobberConfiguration(
-            loop_factory=loop_factory,
             tz=tz or ZoneInfo("UTC"),
+            dumper=dumper,
+            loader=loader,
             durable=durable,
+            serializer=serializer,
             worker_pools=WorkerPools(
                 _processpool=processpool_executor,
                 threadpool=threadpool_executor,
             ),
-            serializer=serializer,
+            loop_factory=loop_factory,
             cron_factory=cron_factory or create_crontab,
         )
         super().__init__(

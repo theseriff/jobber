@@ -13,6 +13,7 @@ from jobber._internal.exceptions import (
     raise_app_not_started_error,
 )
 from jobber._internal.injection import inject_context
+from jobber._internal.inspection import FuncSpec, make_func_spec
 from jobber._internal.middleware.base import build_middleware
 from jobber._internal.middleware.exceptions import ExceptionMiddleware
 from jobber._internal.middleware.retry import RetryMiddleware
@@ -56,6 +57,7 @@ class RootRoute(Route[ParamsT, ReturnT]):
         *,
         name: str,
         func: Callable[ParamsT, ReturnT],
+        func_spec: FuncSpec[ReturnT],
         state: State,
         options: RouteOptions,
         strategy: RunStrategy[ParamsT, ReturnT],
@@ -66,8 +68,9 @@ class RootRoute(Route[ParamsT, ReturnT]):
         self._run_strategy: RunStrategy[ParamsT, ReturnT] = strategy
         self._chain_middleware: CallNext | None = None
         self._shared_state: SharedState = shared_state
-        self.jobber_config: JobberConfiguration = jobber_config
         self.state: State = state
+        self.func_spec: FuncSpec[ReturnT] = func_spec
+        self.jobber_config: JobberConfiguration = jobber_config
 
         # --------------------------------------------------------------------
         # HACK: ProcessPoolExecutor / Multiprocessing  # noqa: ERA001, FIX004
@@ -120,11 +123,12 @@ class RootRoute(Route[ParamsT, ReturnT]):
         return ScheduleBuilder(
             state=self.state,
             options=self.options,
-            name=self.name,
+            route_name=self.name,
             shared_state=self._shared_state,
             jobber_config=self.jobber_config,
             chain_middleware=self._chain_middleware,
             runnable=Runnable(self._run_strategy, *args, **kwargs),
+            func_spec=self.func_spec,
         )
 
 
@@ -165,7 +169,6 @@ class RootRegistrator(Registrator[RootRoute[..., Any]]):
             ):
                 hints = get_type_hints(func)
                 self._jobber_config.serializer.registry_types(hints.values())
-
             strategy = create_run_strategy(
                 func,
                 self._jobber_config,
@@ -174,6 +177,7 @@ class RootRegistrator(Registrator[RootRoute[..., Any]]):
             route = RootRoute(
                 name=name,
                 func=func,
+                func_spec=make_func_spec(func),
                 state=self.state,
                 options=options,
                 strategy=strategy,

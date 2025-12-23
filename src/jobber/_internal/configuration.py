@@ -19,7 +19,8 @@ if TYPE_CHECKING:
     from jobber._internal.common.types import LoopFactory
     from jobber._internal.cron_parser import CronFactory
     from jobber._internal.serializers.base import JobsSerializer
-    from jobber._internal.storage.abc import JobRepository
+    from jobber._internal.storage.abc import ScheduleRepository
+    from jobber._internal.typeadapter.base import Dumper, Loader
 
 
 @dataclass(slots=True, kw_only=True)
@@ -49,9 +50,11 @@ class WorkerPools:
 @dataclass(slots=True, kw_only=True)
 class JobberConfiguration:
     tz: ZoneInfo
-    durable: JobRepository
-    worker_pools: WorkerPools
+    dumper: Dumper
+    loader: Loader
+    durable: ScheduleRepository
     serializer: JobsSerializer
+    worker_pools: WorkerPools
     loop_factory: LoopFactory
     cron_factory: CronFactory
     app_started: bool = False

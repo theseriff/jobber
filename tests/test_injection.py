@@ -1,3 +1,4 @@
+import inspect
 from typing import Any, no_type_check
 from unittest.mock import AsyncMock, Mock
 
@@ -83,7 +84,9 @@ async def test_inject_context_skips_non_inject_parameters(
 ) -> None:
     strategy = create_run_strategy(amock, Mock(), mode=Mock())
     runnable = Runnable(strategy, normal_param="test")
-    inject_context(runnable, Mock(spec=JobContext))
+    mock_context = Mock(spec=JobContext)
+    mock_context.func_spec.signature = inspect.signature(amock)
+    inject_context(runnable, mock_context)
     result = await runnable()
 
     amock.assert_awaited_once_with(normal_param="test")

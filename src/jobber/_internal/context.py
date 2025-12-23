@@ -7,6 +7,7 @@ from jobber._internal.configuration import (
     JobberConfiguration,
     RouteOptions,
 )
+from jobber._internal.inspection import FuncSpec
 from jobber._internal.runner.job import Job
 from jobber._internal.runner.runners import Runnable
 
@@ -17,7 +18,8 @@ JobberApp: TypeAlias = Callable[["JobContext"], Any]
 class JobContext:
     job: Job[Any]
     state: State
-    request_state: RequestState
     runnable: Runnable[Any]
+    request_state: RequestState
     route_options: RouteOptions
     jobber_config: JobberConfiguration
+    func_spec: FuncSpec[Any]

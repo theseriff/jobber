@@ -2,10 +2,10 @@ from dataclasses import dataclass
 from timeit import timeit
 from typing import Any, NamedTuple
 
+from jobber._internal.serializers.json_extended import SupportedTypes
 from jobber.serializers import (
     ExtendedJSONSerializer,
     JobsSerializer,
-    SupportedTypes,
     UnsafePickleSerializer,
 )
 
