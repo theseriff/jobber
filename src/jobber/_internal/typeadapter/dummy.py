@@ -9,11 +9,11 @@ from jobber._internal.typeadapter.base import Dumper, Loader
 
 class DummyLoader(Loader):
     @override
-    def load(self, data: Any, tp: Any) -> Any:
+    def load(self, data: Any, tp: Any, /) -> Any:
         pass
 
 
 class DummyDumper(Dumper):
     @override
-    def dump(self, data: Any, tp: Any) -> Any:
+    def dump(self, data: Any, tp: Any, /) -> Any:
         pass

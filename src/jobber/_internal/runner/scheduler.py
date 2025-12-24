@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import itertools
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Generic, TypedDict, TypeVar
+from itertools import count
+from typing import TYPE_CHECKING, Generic, TypeVar
 from uuid import uuid4
-
-from typing_extensions import NotRequired, Unpack
 
 from jobber._internal.common.constants import INFINITY, JobStatus
 from jobber._internal.common.datastructures import RequestState, State
@@ -33,21 +31,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger("jobber.runner")
 
 
-class CronOptions(TypedDict):
-    job_id: str
-    now: NotRequired[datetime]
-
-
-class DelayOptions(TypedDict):
-    job_id: NotRequired[str]
-    now: NotRequired[datetime]
-
-
-class AtOptions(TypedDict):
-    job_id: NotRequired[str]
-    now: NotRequired[datetime]
-
-
 ReturnT = TypeVar("ReturnT")
 
 
@@ -56,8 +39,8 @@ class CronContext(Generic[ReturnT]):
     job: Job[ReturnT]
     cron: Cron
     cron_parser: CronParser
+    exec_count: count[int] = field(default_factory=lambda: count(start=1))
     failure_count: int = 0
-    exec_count: itertools.count[int] = field(default_factory=itertools.count)
 
     def is_run_allowed_by_limit(self) -> bool:
         if self.cron.max_runs == INFINITY:
@@ -98,10 +81,9 @@ class ScheduleBuilder(Generic[ReturnT]):
         self.route_name: str = route_name
         self.route_options: RouteOptions = options
 
-    def ensure_job_id(self, job_id: str) -> str:
+    def ensure_job_id(self, job_id: str) -> None:
         if job_id in self._shared_state.pending_jobs:
             raise DuplicateJobError(job_id)
-        return job_id
 
     def _now(self) -> datetime:
         return datetime.now(tz=self._jobber_config.tz)
@@ -112,11 +94,12 @@ class ScheduleBuilder(Generic[ReturnT]):
     async def cron(
         self,
         cron: str | Cron,
-        /,
-        **options: Unpack[CronOptions],
+        *,
+        job_id: str,
+        now: datetime | None = None,
     ) -> Job[ReturnT]:
-        job_id = self.ensure_job_id(options["job_id"])
-        now = options.get("now") or self._now()
+        self.ensure_job_id(job_id)
+        now = now or self._now()
 
         if isinstance(cron, str):
             cron = Cron(cron)
@@ -143,8 +126,7 @@ class ScheduleBuilder(Generic[ReturnT]):
             route_name=self.route_name,
             job_id=job_id,
             arguments=self._runnable.bound.arguments,
-            cron=cron,
-            options={"job_id": job_id, "now": now},
+            cron={"cron": cron, "job_id": job_id, "now": now},
         )
         formatted = self._jobber_config.dumper.dump(message, Message)
         raw_message = self._jobber_config.serializer.dumpb(formatted)
@@ -160,23 +142,25 @@ class ScheduleBuilder(Generic[ReturnT]):
     async def delay(
         self,
         seconds: float,
-        /,
-        **options: Unpack[DelayOptions],
+        *,
+        job_id: str | None = None,
+        now: datetime | None = None,
     ) -> Job[ReturnT]:
-        now = options.get("now") or self._now()
+        now = now or self._now()
         at = now + timedelta(seconds=seconds)
-        return await self._at(at=at, now=now, job_id=options.get("job_id"))
+        return await self._at(at=at, now=now, job_id=job_id)
 
     async def at(
         self,
         at: datetime,
-        /,
-        **options: Unpack[AtOptions],
+        *,
+        job_id: str | None = None,
+        now: datetime | None = None,
     ) -> Job[ReturnT]:
         return await self._at(
             at=at,
-            now=options.get("now") or datetime.now(tz=at.tzinfo),
-            job_id=options.get("job_id"),
+            now=now or datetime.now(tz=at.tzinfo),
+            job_id=job_id,
         )
 
     async def _at(
@@ -186,7 +170,8 @@ class ScheduleBuilder(Generic[ReturnT]):
         now: datetime,
         job_id: str | None,
     ) -> Job[ReturnT]:
-        job_id = self.ensure_job_id(job_id) if job_id else uuid4().hex
+        job_id = job_id or uuid4().hex
+        self.ensure_job_id(job_id)
 
         job = Job(
             exec_at=at,
@@ -224,10 +209,10 @@ class ScheduleBuilder(Generic[ReturnT]):
     async def _exec_cron(self, ctx: CronContext[ReturnT]) -> None:
         job = ctx.job
         await self._exec_job(job)
-        if job.exception is not None:
-            ctx.failure_count += 1
-        else:
+        if job.status is JobStatus.SUCCESS:
             ctx.failure_count = 0
+        else:
+            ctx.failure_count += 1
         if (
             job.is_reschedulable()
             and ctx.is_run_allowed_by_limit()
