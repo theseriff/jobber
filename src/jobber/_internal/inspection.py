@@ -41,10 +41,9 @@ def get_result_type(hints: dict[str, Any]) -> Any:  # noqa: ANN401
 def make_func_spec(func: Callable[ParamsT, ReturnT]) -> FuncSpec[ReturnT]:
     sig = inspect.signature(func)
     hints = get_type_hints(func)
-    fields_in = get_func_fields(sig, hints)
     return FuncSpec(
         name=func.__name__,
-        fields_in=fields_in,
+        fields_in=get_func_fields(sig, hints),
         result_type=get_result_type(hints),
         signature=sig,
     )

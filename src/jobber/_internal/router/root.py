@@ -120,6 +120,8 @@ class RootRoute(Route[ParamsT, ReturnT]):
     ) -> ScheduleBuilder[Any]:
         if not (self.jobber_config.app_started and self._chain_middleware):
             raise_app_not_started_error("schedule")
+
+        bound = self.func_spec.signature.bind(*args, **kwargs)
         return ScheduleBuilder(
             state=self.state,
             options=self.options,
@@ -127,8 +129,7 @@ class RootRoute(Route[ParamsT, ReturnT]):
             shared_state=self._shared_state,
             jobber_config=self.jobber_config,
             chain_middleware=self._chain_middleware,
-            runnable=Runnable(self._run_strategy, *args, **kwargs),
-            func_spec=self.func_spec,
+            runnable=Runnable(self._run_strategy, bound),
         )
 
 
@@ -292,6 +293,5 @@ class RootRouter(Router):
             await router.task.emit_shutdown()
 
     async def _entry(self, context: JobContext) -> Any:  # noqa: ANN401
-        runnable: Runnable[Any] = context.runnable
-        inject_context(runnable, context)
-        return await runnable()
+        inject_context(context)
+        return await context.runnable()

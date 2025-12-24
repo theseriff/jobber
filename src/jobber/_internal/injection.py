@@ -2,7 +2,6 @@ import inspect
 from typing import Any, TypeVar, get_origin, get_type_hints
 
 from jobber._internal.context import JobContext
-from jobber._internal.runner.runners import Runnable
 
 ReturnT = TypeVar("ReturnT")
 
@@ -19,8 +18,10 @@ INJECT: Any = object()
 CONTEXT_TYPE_MAP = _build_context_mapping(JobContext)
 
 
-def inject_context(runnable: Runnable[ReturnT], context: JobContext) -> None:
-    for name, param in context.func_spec.signature.parameters.items():
+def inject_context(context: JobContext) -> None:
+    runnable = context.runnable
+    arguments = runnable.bound.arguments
+    for name, param in runnable.bound.signature.parameters.items():
         if param.default is not INJECT:
             continue
 
@@ -40,4 +41,4 @@ def inject_context(runnable: Runnable[ReturnT], context: JobContext) -> None:
                 f"Available types: {list(CONTEXT_TYPE_MAP.keys())}"
             )
             raise ValueError(msg)
-        runnable.kwargs[name] = val
+        arguments[name] = val

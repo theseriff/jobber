@@ -5,7 +5,7 @@ import inspect
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any, Final, Generic, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Final, Generic, ParamSpec, TypeVar
 
 from typing_extensions import override
 
@@ -82,25 +82,18 @@ class PoolStrategy(RunStrategy[ParamsT, ReturnT]):
 
 
 class Runnable(Generic[ReturnT]):
-    __slots__: tuple[str, ...] = (
-        "args",
-        "kwargs",
-        "strategy",
-    )
+    __slots__: tuple[str, ...] = ("bound", "strategy")
 
     def __init__(
         self,
         strategy: RunStrategy[ParamsT, ReturnT],
-        /,
-        *args: ParamsT.args,
-        **kwargs: ParamsT.kwargs,
+        bound: inspect.BoundArguments,
     ) -> None:
         self.strategy: Final = strategy
-        self.args: list[Any] = list(args)
-        self.kwargs: dict[str, Any] = kwargs
+        self.bound: inspect.BoundArguments = bound
 
     def __call__(self) -> Awaitable[ReturnT]:
-        return self.strategy(*self.args, **self.kwargs)  # pyright: ignore[reportCallIssue]
+        return self.strategy(*self.bound.args, **self.bound.kwargs)
 
 
 def _validate_run_mode(mode: RunMode | None, *, is_async: bool) -> RunMode:

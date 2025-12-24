@@ -83,11 +83,15 @@ async def test_inject_context_skips_non_inject_parameters(
     amock: AsyncMock,
 ) -> None:
     strategy = create_run_strategy(amock, Mock(), mode=Mock())
-    runnable = Runnable(strategy, normal_param="test")
+
+    bound = inspect.signature(amock).bind(normal_param="test")
+    runnable = Runnable(strategy, bound)
+
     mock_context = Mock(spec=JobContext)
-    mock_context.func_spec.signature = inspect.signature(amock)
-    inject_context(runnable, mock_context)
+    mock_context.runnable = runnable
+
+    inject_context(mock_context)
     result = await runnable()
 
     amock.assert_awaited_once_with(normal_param="test")
-    assert runnable.kwargs.get("normal_param") == "test" == result
+    assert runnable.bound.kwargs.get("normal_param") == "test" == result

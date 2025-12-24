@@ -6,15 +6,16 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from itertools import count
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypedDict, TypeVar
 from uuid import uuid4
+
+from typing_extensions import NotRequired, Unpack
 
 from jobber._internal.common.constants import INFINITY, JobStatus
 from jobber._internal.common.datastructures import RequestState, State
 from jobber._internal.configuration import Cron
 from jobber._internal.context import JobContext
 from jobber._internal.exceptions import DuplicateJobError, JobTimeoutError
-from jobber._internal.message import Message, pack_message
 from jobber._internal.runner.job import Job
 
 if TYPE_CHECKING:
@@ -23,13 +24,28 @@ if TYPE_CHECKING:
         RouteOptions,
     )
     from jobber._internal.cron_parser import CronParser
-    from jobber._internal.inspection import FuncSpec
     from jobber._internal.middleware.base import CallNext
     from jobber._internal.runner.runners import Runnable
     from jobber._internal.shared_state import SharedState
 
 
 logger = logging.getLogger("jobber.runner")
+
+
+class CronOptions(TypedDict):
+    job_id: str
+    now: NotRequired[datetime]
+
+
+class DelayOptions(TypedDict):
+    job_id: NotRequired[str]
+    now: NotRequired[datetime]
+
+
+class AtOptions(TypedDict):
+    job_id: NotRequired[str]
+    now: NotRequired[datetime]
+
 
 ReturnT = TypeVar("ReturnT")
 
@@ -43,7 +59,7 @@ class CronContext(Generic[ReturnT]):
     exec_count: count[int] = field(default_factory=count)
 
     def is_run_allowed_by_limit(self) -> bool:
-        if self.cron.max_runs is INFINITY:
+        if self.cron.max_runs == INFINITY:
             return True
         return next(self.exec_count) < self.cron.max_runs
 
@@ -58,7 +74,6 @@ class ScheduleBuilder(Generic[ReturnT]):
         "_runnable",
         "_shared_state",
         "_state",
-        "func_spec",
         "route_name",
         "route_options",
     )
@@ -69,11 +84,10 @@ class ScheduleBuilder(Generic[ReturnT]):
         state: State,
         shared_state: SharedState,
         jobber_config: JobberConfiguration,
-        func_spec: FuncSpec[ReturnT],
         runnable: Runnable[ReturnT],
         chain_middleware: CallNext,
-        options: RouteOptions,
         route_name: str,
+        options: RouteOptions,
     ) -> None:
         self._state: State = state
         self._shared_state: SharedState = shared_state
@@ -81,12 +95,12 @@ class ScheduleBuilder(Generic[ReturnT]):
         self._runnable: Runnable[ReturnT] = runnable
         self._chain_middleware: CallNext = chain_middleware
         self.route_name: str = route_name
-        self.func_spec: FuncSpec[ReturnT] = func_spec
         self.route_options: RouteOptions = options
 
-    def _validate_job_id(self, job_id: str) -> None:
+    def _validate_job_id(self, job_id: str) -> str:
         if job_id in self._shared_state.pending_jobs:
             raise DuplicateJobError(job_id)
+        return job_id
 
     def _now(self) -> datetime:
         return datetime.now(tz=self._jobber_config.tz)
@@ -97,31 +111,18 @@ class ScheduleBuilder(Generic[ReturnT]):
     async def cron(
         self,
         cron: str | Cron,
-        job_id: str,
-        *,
-        now: datetime | None = None,
+        /,
+        **options: Unpack[CronOptions],
     ) -> Job[ReturnT]:
-        self._validate_job_id(job_id)
+        job_id = self._validate_job_id(options["job_id"])
+        now = options.get("now") or self._now()
+
         if isinstance(cron, str):
             cron = Cron(cron)
 
-        now = now or self._now()
         cron_parser = self._jobber_config.cron_factory(cron.expression)
         at = cron_parser.next_run(now=now)
 
-        message = Message(
-            route_name=self.route_name,
-            job_id=job_id,
-            args=self._runnable.args,
-            kwargs=self._runnable.kwargs,
-            options={"now": now},
-            cron=cron,
-        )
-        _raw_message = pack_message(
-            message,
-            self._jobber_config.dumper,
-            self._jobber_config.serializer,
-        )
         job = Job(
             exec_at=at,
             job_id=job_id,
@@ -140,40 +141,35 @@ class ScheduleBuilder(Generic[ReturnT]):
 
     async def delay(
         self,
-        delay_seconds: float,
-        *,
-        now: datetime | None = None,
-        job_id: str | None = None,
+        seconds: float,
+        /,
+        **options: Unpack[DelayOptions],
     ) -> Job[ReturnT]:
-        now = now or self._now()
-        at = now + timedelta(seconds=delay_seconds)
-        return await self._at(
-            now=now,
-            at=at,
-            job_id=job_id or uuid4().hex,
-        )
+        now = options.get("now") or self._now()
+        at = now + timedelta(seconds=seconds)
+        return await self._at(at=at, now=now, job_id=options.get("job_id"))
 
     async def at(
         self,
         at: datetime,
-        *,
-        now: datetime | None = None,
-        job_id: str | None = None,
+        /,
+        **options: Unpack[AtOptions],
     ) -> Job[ReturnT]:
         return await self._at(
-            now=now or datetime.now(tz=at.tzinfo),
             at=at,
-            job_id=job_id or uuid4().hex,
+            now=options.get("now") or datetime.now(tz=at.tzinfo),
+            job_id=options.get("job_id"),
         )
 
     async def _at(
         self,
         *,
-        now: datetime,
         at: datetime,
-        job_id: str,
+        now: datetime,
+        job_id: str | None,
     ) -> Job[ReturnT]:
-        self._validate_job_id(job_id)
+        job_id = self._validate_job_id(job_id) if job_id else uuid4().hex
+
         job = Job(
             exec_at=at,
             job_id=job_id,
@@ -209,7 +205,6 @@ class ScheduleBuilder(Generic[ReturnT]):
             runnable=self._runnable,
             route_options=self.route_options,
             jobber_config=self._jobber_config,
-            func_spec=self.func_spec,
         )
         try:
             result = await self._chain_middleware(job_context)
