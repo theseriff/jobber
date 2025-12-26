@@ -50,13 +50,13 @@ ReturnT = TypeVar("ReturnT")
 class SQLiteStorage(Storage):
     def __init__(
         self,
+        database: str | Path = "jobber.db",
         *,
-        db_path: str | Path = "jobber.db",
         table_name: str = "jobber_schedules",
         timeout: float = 20.0,
     ) -> None:
-        self.db_path: Path = (
-            Path(db_path) if isinstance(db_path, str) else db_path
+        self.database: Path = (
+            Path(database) if isinstance(database, str) else database
         )
         self.table_name: str = table_name
         self.timeout: float = timeout
@@ -91,7 +91,7 @@ class SQLiteStorage(Storage):
     @override
     async def startup(self) -> None:
         conn = sqlite3.connect(
-            database=self.db_path,
+            database=self.database,
             timeout=self.timeout,
             check_same_thread=False,
         )

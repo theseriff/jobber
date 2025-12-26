@@ -72,7 +72,7 @@ class Jobber(RootRouter):
         serializer: Serializer | None = None,
         middleware: Sequence[BaseMiddleware] | None = None,
         cron_factory: CronFactory | None = None,
-        loop_factory: LoopFactory = lambda: asyncio.get_running_loop(),
+        loop_factory: LoopFactory = asyncio.get_running_loop,
         exception_handlers: MappingExceptionHandlers | None = None,
         threadpool_executor: ThreadPoolExecutor | None = None,
         processpool_executor: ProcessPoolExecutor | None = None,
