@@ -63,7 +63,11 @@ async def test_sqlite_with_jobber(now: datetime) -> None:
                     job_id=job1.id,
                     func_name=f1.name,
                     arguments={},
-                    at={"at": job1.exec_at, "job_id": job1.id, "now": now},
+                    trigger={
+                        "at": job1.exec_at,
+                        "job_id": job1.id,
+                        "now": now,
+                    },
                 ),
                 Message,
             )
@@ -74,7 +78,7 @@ async def test_sqlite_with_jobber(now: datetime) -> None:
                     job_id=job1_cron.id,
                     func_name=f1.name,
                     arguments={},
-                    cron={"cron": cron, "job_id": job1_cron.id, "now": now},
+                    trigger={"cron": cron, "job_id": job1_cron.id, "now": now},
                 ),
                 Message,
             )
@@ -100,3 +104,7 @@ async def test_sqlite_with_jobber(now: datetime) -> None:
         assert job1.result() == "test"
         assert job2.result() == "test"
         assert await app.configs.storage.get_schedules() == [cron_scheduled]
+
+
+async def test_restore_schedules() -> None:
+    pass

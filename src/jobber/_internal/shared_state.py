@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import asyncio
 
-    from jobber._internal.runner.job import Job
+    from jobber._internal.scheduler.job import Job
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)

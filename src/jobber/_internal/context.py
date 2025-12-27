@@ -7,8 +7,8 @@ from jobber._internal.configuration import (
     JobberConfiguration,
     RouteOptions,
 )
-from jobber._internal.runner.job import Job
-from jobber._internal.runner.runners import Runnable
+from jobber._internal.runners import Runnable
+from jobber._internal.scheduler.job import Job
 
 JobberApp: TypeAlias = Callable[["JobContext"], Any]
 

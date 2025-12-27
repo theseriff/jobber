@@ -20,11 +20,12 @@ from jobber._internal.middleware.exceptions import ExceptionMiddleware
 from jobber._internal.middleware.retry import RetryMiddleware
 from jobber._internal.middleware.timeout import TimeoutMiddleware
 from jobber._internal.router.base import Registrator, Route, Router
-from jobber._internal.runner.runners import Runnable, create_run_strategy
-from jobber._internal.runner.scheduler import ScheduleBuilder
+from jobber._internal.runners import Runnable, create_run_strategy
+from jobber._internal.scheduler.scheduler import ScheduleBuilder
 from jobber._internal.serializers.json_extended import ExtendedJSONSerializer
 
 if TYPE_CHECKING:
+    import inspect
     from collections.abc import Callable, Iterator, Sequence
 
     from jobber._internal.common.datastructures import State
@@ -41,7 +42,7 @@ if TYPE_CHECKING:
         MappingExceptionHandlers,
     )
     from jobber._internal.router.node import NodeRouter
-    from jobber._internal.runner.runners import RunStrategy
+    from jobber._internal.runners import RunStrategy
     from jobber._internal.shared_state import SharedState
 
 
@@ -113,25 +114,32 @@ class RootRoute(Route[ParamsT, ReturnT]):
             func.__qualname__ = new_qualname
         setattr(module, new_name, func)
 
+    def create_builder(
+        self,
+        bound: inspect.BoundArguments,
+        /,
+    ) -> ScheduleBuilder[Any]:
+        if not (self.jobber_config.app_started and self._chain_middleware):
+            raise_app_not_started_error("schedule")
+        return ScheduleBuilder(
+            state=self.state,
+            options=self.options,
+            func_name=self.name,
+            func_spec=self.func_spec,
+            shared_state=self._shared_state,
+            jobber_config=self.jobber_config,
+            chain_middleware=self._chain_middleware,
+            runnable=Runnable(self._run_strategy, bound),
+        )
+
     @override
     def schedule(
         self,
         *args: ParamsT.args,
         **kwargs: ParamsT.kwargs,
     ) -> ScheduleBuilder[Any]:
-        if not (self.jobber_config.app_started and self._chain_middleware):
-            raise_app_not_started_error("schedule")
-
         bound = self.func_spec.signature.bind(*args, **kwargs)
-        return ScheduleBuilder(
-            state=self.state,
-            options=self.options,
-            func_name=self.name,
-            shared_state=self._shared_state,
-            jobber_config=self.jobber_config,
-            chain_middleware=self._chain_middleware,
-            runnable=Runnable(self._run_strategy, bound),
-        )
+        return self.create_builder(bound)
 
 
 class RootRegistrator(Registrator[RootRoute[..., Any]]):

@@ -162,6 +162,27 @@ class Jobber(RootRouter):
 
         await asyncio.wait_for(target(), timeout=timeout)
 
+    async def _restore_schedules(self) -> None:
+        schedules = await self.configs.storage.get_schedules()
+        for sch in schedules:
+            if sch.job_id in self.task._shared_state.pending_jobs:
+                continue
+
+            route = self.task._routes[sch.func_name]
+            de_message = self.configs.serializer.loadb(sch.message)
+            msg = self.configs.loader.load(de_message, Message)
+            for name, arg in msg.arguments.items():
+                msg.arguments[name] = self.configs.loader.load(
+                    arg,
+                    route.func_spec.params_type[name],
+                )
+            bound = route.func_spec.signature.bind(**msg.arguments)
+            builder = route.create_builder(bound)
+            if "cron" in msg.trigger:
+                _ = await builder.cron(**msg.trigger)
+            elif "at" in msg.trigger:
+                _ = await builder.at(**msg.trigger)
+
     async def startup(self) -> None:
         """Initialize the Jobber application.
 

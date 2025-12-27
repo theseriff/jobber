@@ -22,5 +22,4 @@ class Message:
     job_id: str
     func_name: str
     arguments: dict[str, Any]
-    cron: CronArguments | None = None
-    at: AtArguments | None = None
+    trigger: CronArguments | AtArguments

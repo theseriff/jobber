@@ -9,7 +9,7 @@ from jobber import INJECT, Job, Jobber, JobContext, State
 from jobber._internal.common.constants import EMPTY
 from jobber._internal.common.datastructures import RequestState
 from jobber._internal.injection import inject_context
-from jobber._internal.runner.runners import Runnable, create_run_strategy
+from jobber._internal.runners import Runnable, create_run_strategy
 from jobber.exceptions import JobFailedError
 from jobber.middleware import BaseMiddleware, CallNext
 from tests.conftest import create_app

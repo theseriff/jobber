@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from jobber._internal.common.types import Lifespan
     from jobber._internal.configuration import RouteOptions
     from jobber._internal.middleware.base import BaseMiddleware
-    from jobber._internal.runner.scheduler import ScheduleBuilder
+    from jobber._internal.scheduler.scheduler import ScheduleBuilder
 
 
 ReturnT = TypeVar("ReturnT")

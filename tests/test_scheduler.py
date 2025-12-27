@@ -76,5 +76,5 @@ async def test_jobber(  # noqa: PLR0913
 
     assert job_sync.result() == expected
     assert job_async.result() == expected
-    assert len(app.task._shared_state.pending_tasks) == 0
-    assert len(app.task._shared_state.pending_jobs) == 0
+    assert app.task._shared_state.pending_jobs == {}
+    assert app.task._shared_state.pending_tasks == set()

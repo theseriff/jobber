@@ -13,8 +13,8 @@ from jobber._internal.common.datastructures import RequestState, State
 from jobber._internal.configuration import Cron
 from jobber._internal.context import JobContext
 from jobber._internal.exceptions import DuplicateJobError, JobTimeoutError
-from jobber._internal.message import Message
-from jobber._internal.runner.job import Job
+from jobber._internal.message import AtArguments, CronArguments, Message
+from jobber._internal.scheduler.job import Job
 from jobber._internal.storage.abc import ScheduledJob
 from jobber._internal.storage.dummy import DummyStorage
 
@@ -24,8 +24,9 @@ if TYPE_CHECKING:
         RouteOptions,
     )
     from jobber._internal.cron_parser import CronParser
+    from jobber._internal.inspection import FuncSpec
     from jobber._internal.middleware.base import CallNext
-    from jobber._internal.runner.runners import Runnable
+    from jobber._internal.runners import Runnable
     from jobber._internal.shared_state import SharedState
 
 
@@ -55,11 +56,12 @@ class CronContext(Generic[ReturnT]):
 class ScheduleBuilder(Generic[ReturnT]):
     __slots__: tuple[str, ...] = (
         "_chain_middleware",
-        "_jobber_config",
+        "_configs",
         "_runnable",
         "_shared_state",
         "_state",
         "func_name",
+        "func_spec",
         "route_options",
     )
 
@@ -72,18 +74,20 @@ class ScheduleBuilder(Generic[ReturnT]):
         runnable: Runnable[ReturnT],
         chain_middleware: CallNext,
         func_name: str,
+        func_spec: FuncSpec[ReturnT],
         options: RouteOptions,
     ) -> None:
         self._state: State = state
         self._shared_state: SharedState = shared_state
-        self._jobber_config: JobberConfiguration = jobber_config
+        self._configs: JobberConfiguration = jobber_config
         self._runnable: Runnable[ReturnT] = runnable
         self._chain_middleware: CallNext = chain_middleware
         self.func_name: str = func_name
+        self.func_spec: FuncSpec[ReturnT] = func_spec
         self.route_options: RouteOptions = options
 
     def _now(self) -> datetime:
-        return datetime.now(tz=self._jobber_config.tz)
+        return datetime.now(tz=self._configs.tz)
 
     def _calculate_delay_seconds(self, now: datetime, at: datetime) -> float:
         return at.timestamp() - now.timestamp()
@@ -94,7 +98,7 @@ class ScheduleBuilder(Generic[ReturnT]):
 
     def _should_persist(self) -> bool:
         return (
-            not isinstance(self._jobber_config.storage, DummyStorage)
+            not isinstance(self._configs.storage, DummyStorage)
             and self.route_options.get("durable", True) is True
         )
 
@@ -111,7 +115,7 @@ class ScheduleBuilder(Generic[ReturnT]):
         if isinstance(cron, str):
             cron = Cron(cron)
 
-        cron_parser = self._jobber_config.cron_factory(cron.expression)
+        cron_parser = self._configs.cron_factory(cron.expression)
         at = cron_parser.next_run(now=now)
 
         job = Job(
@@ -119,24 +123,19 @@ class ScheduleBuilder(Generic[ReturnT]):
             job_id=job_id,
             pending_jobs=self._shared_state.pending_jobs,
             cron_expression=cron.expression,
-            storage=self._jobber_config.storage,
+            storage=self._configs.storage,
         )
         cron_ctx = CronContext(job=job, cron=cron, cron_parser=cron_parser)
         delay_seconds = self._calculate_delay_seconds(now=now, at=at)
-        loop = self._jobber_config.getloop()
+        loop = self._configs.getloop()
         when = loop.time() + delay_seconds
         handle = loop.call_at(when, self._pre_exec_cron, cron_ctx)
         job.bind_handle(handle)
         self._shared_state.pending_jobs[job.id] = job
 
         if self._should_persist():
-            message = Message(
-                job_id=job_id,
-                func_name=self.func_name,
-                arguments=self._runnable.bound.arguments,
-                cron={"cron": cron, "job_id": job_id, "now": now},
-            )
-            await self._save_scheduled(message, job.status)
+            trigger = CronArguments(cron=cron, job_id=job_id, now=now)
+            await self._save_scheduled(trigger, job)
 
         return job
 
@@ -178,11 +177,11 @@ class ScheduleBuilder(Generic[ReturnT]):
             exec_at=at,
             job_id=job_id,
             pending_jobs=self._shared_state.pending_jobs,
-            storage=self._jobber_config.storage,
+            storage=self._configs.storage,
         )
         self._shared_state.pending_jobs[job.id] = job
 
-        loop = self._jobber_config.getloop()
+        loop = self._configs.getloop()
         delay_seconds = self._calculate_delay_seconds(now=now, at=at)
         if delay_seconds <= 0:
             handle = loop.call_soon(self._pre_exec_at, job)
@@ -192,39 +191,39 @@ class ScheduleBuilder(Generic[ReturnT]):
         when = loop.time() + delay_seconds
         if self._should_persist():
             handle = loop.call_at(when, self._pre_exec_at_with_persist, job)
-            message = Message(
-                job_id=job_id,
-                func_name=self.func_name,
-                arguments=self._runnable.bound.arguments,
-                at={"at": at, "job_id": job_id, "now": now},
-            )
-            await self._save_scheduled(message, job.status)
+            trigger = AtArguments(at=at, job_id=job_id, now=now)
+            await self._save_scheduled(trigger, job)
         else:
             handle = loop.call_at(when, self._pre_exec_at, job)
 
         job.bind_handle(handle)
         return job
 
-    async def _save_scheduled(self, msg: Message, status: JobStatus) -> None:
-        formatted = self._jobber_config.dumper.dump(msg, Message)
-        raw_message = self._jobber_config.serializer.dumpb(formatted)
+    async def _save_scheduled(
+        self,
+        trigger: CronArguments | AtArguments,
+        job: Job[ReturnT],
+    ) -> None:
+        msg = Message(
+            job_id=job.id,
+            func_name=self.func_name,
+            arguments=self._runnable.bound.arguments,
+            trigger=trigger,
+        )
+        for name, arg in msg.arguments.items():
+            msg.arguments[name] = self._configs.dumper.dump(
+                arg,
+                self.func_spec.params_type[name],
+            )
+        formatted = self._configs.dumper.dump(msg, Message)
+        raw_message = self._configs.serializer.dumpb(formatted)
         scheduled_job = ScheduledJob(
             job_id=msg.job_id,
             func_name=self.func_name,
             message=raw_message,
-            status=status,
+            status=job.status,
         )
-        await self._jobber_config.storage.add_schedule(scheduled_job)
-
-    def _pre_exec_at(self, job: Job[ReturnT]) -> None:
-        task = asyncio.create_task(self._exec_at(job), name=job.id)
-        self._shared_state.pending_tasks.add(task)
-        task.add_done_callback(self._shared_state.pending_tasks.discard)
-
-    async def _exec_at(self, job: Job[ReturnT]) -> None:
-        await self._exec_job(job)
-        _ = self._shared_state.pending_jobs.pop(job.id, None)
-        job._event.set()
+        await self._configs.storage.add_schedule(scheduled_job)
 
     def _pre_exec_at_with_persist(self, job: Job[ReturnT]) -> None:
         task = asyncio.create_task(
@@ -237,7 +236,17 @@ class ScheduleBuilder(Generic[ReturnT]):
     async def _exec_at_with_persist(self, job: Job[ReturnT]) -> None:
         await self._exec_job(job)
         _ = self._shared_state.pending_jobs.pop(job.id, None)
-        await self._jobber_config.storage.delete_schedule(job.id)
+        await self._configs.storage.delete_schedule(job.id)
+        job._event.set()
+
+    def _pre_exec_at(self, job: Job[ReturnT]) -> None:
+        task = asyncio.create_task(self._exec_at(job), name=job.id)
+        self._shared_state.pending_tasks.add(task)
+        task.add_done_callback(self._shared_state.pending_tasks.discard)
+
+    async def _exec_at(self, job: Job[ReturnT]) -> None:
+        await self._exec_job(job)
+        _ = self._shared_state.pending_jobs.pop(job.id, None)
         job._event.set()
 
     def _pre_exec_cron(self, ctx: CronContext[ReturnT]) -> None:
@@ -257,7 +266,7 @@ class ScheduleBuilder(Generic[ReturnT]):
         if (
             job.is_reschedulable()
             and ctx.is_run_allowed_by_limit()
-            and self._jobber_config.app_started
+            and self._configs.app_started
         ):
             if ctx.is_failure_allowed_by_limit():
                 self._reschedule_cron(ctx)
@@ -277,7 +286,7 @@ class ScheduleBuilder(Generic[ReturnT]):
         now = self._now()
         next_at = ctx.cron_parser.next_run(now=now)
         delay_seconds = self._calculate_delay_seconds(now=now, at=next_at)
-        loop = self._jobber_config.getloop()
+        loop = self._configs.getloop()
         when = loop.time() + delay_seconds
         time_handler = loop.call_at(when, self._pre_exec_cron, ctx)
         job = ctx.job
@@ -295,7 +304,7 @@ class ScheduleBuilder(Generic[ReturnT]):
             request_state=RequestState(),
             runnable=self._runnable,
             route_options=self.route_options,
-            jobber_config=self._jobber_config,
+            jobber_config=self._configs,
         )
         try:
             result = await self._chain_middleware(job_context)
