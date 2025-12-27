@@ -62,12 +62,12 @@ async def test_jobber(  # noqa: PLR0913
             job_sync = await f1_reg.schedule(num).delay(0, now=now)
             job_async = await f2_reg.schedule(num).delay(0, now=now)
         elif method == "cron":
-            exp = "* * * * *"
+            cron = Cron("* * * * *", max_runs=1)
             job_sync = await f1_reg.schedule(num).cron(
-                exp, job_id="test1", now=now
+                cron, job_id="test1", now=now
             )
             job_async = await f2_reg.schedule(num).cron(
-                Cron(exp, max_runs=1), job_id="test2", now=now
+                cron, job_id="test2", now=now
             )
         else:
             raise NotImplementedError

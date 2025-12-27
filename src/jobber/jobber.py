@@ -9,7 +9,11 @@ from zoneinfo import ZoneInfo
 
 from typing_extensions import Self
 
-from jobber._internal.configuration import JobberConfiguration, WorkerPools
+from jobber._internal.configuration import (
+    Cron,
+    JobberConfiguration,
+    WorkerPools,
+)
 from jobber._internal.message import Message
 from jobber._internal.router.root import RootRouter
 from jobber._internal.serializers.json import JSONSerializer
@@ -29,6 +33,7 @@ if TYPE_CHECKING:
     from jobber._internal.cron_parser import CronFactory
     from jobber._internal.middleware.base import BaseMiddleware
     from jobber._internal.middleware.exceptions import MappingExceptionHandlers
+    from jobber._internal.scheduler.job import Job
     from jobber._internal.serializers.base import Serializer
     from jobber._internal.storage.abc import Storage
     from jobber._internal.typeadapter.base import Dumper, Loader
@@ -91,7 +96,7 @@ class Jobber(RootRouter):
 
         if serializer is None:
             serializer = (
-                ExtendedJSONSerializer({"Message": Message})
+                ExtendedJSONSerializer({"Message": Message, "Cron": Cron})
                 if dumper is None and loader is None
                 else JSONSerializer()
             )
@@ -121,6 +126,42 @@ class Jobber(RootRouter):
             jobber_config=self.configs,
             exception_handlers=exception_handlers,
         )
+
+    async def _restore_schedules(self) -> None:
+        schedules = await self.configs.storage.get_schedules()
+        for sch in schedules:
+            if sch.job_id in self.task._shared_state.pending_jobs:
+                continue
+            de_message = self.configs.serializer.loadb(sch.message)
+            msg = self.configs.loader.load(de_message, Message)
+            await self._feed_message(msg)
+
+    async def _feed_message(self, msg: Message) -> None:
+        route = self.task._routes[msg.func_name]
+        for name, arg in msg.arguments.items():
+            msg.arguments[name] = self.configs.loader.load(
+                arg,
+                route.func_spec.params_type[name],
+            )
+        bound = route.func_spec.signature.bind(**msg.arguments)
+        builder = route.create_builder(bound)
+        if "cron" in msg.trigger:
+            _ = await builder.cron(**msg.trigger)
+        else:
+            _ = await builder.at(**msg.trigger)
+
+    def find_job(self, id_: str, /) -> Job[ReturnT] | None:
+        """Find an active job by its ID.
+
+        Args:
+            id_: Unique identifier of the job.
+
+        Returns:
+            The `Job` instance if it's currently pending or running,
+            otherwise `None`.
+
+        """
+        return self.task._shared_state.pending_jobs.get(id_)
 
     async def wait_all(self, timeout: float | None = None) -> None:
         """Wait for all currently scheduled jobs to complete.
@@ -162,27 +203,6 @@ class Jobber(RootRouter):
 
         await asyncio.wait_for(target(), timeout=timeout)
 
-    async def _restore_schedules(self) -> None:
-        schedules = await self.configs.storage.get_schedules()
-        for sch in schedules:
-            if sch.job_id in self.task._shared_state.pending_jobs:
-                continue
-
-            route = self.task._routes[sch.func_name]
-            de_message = self.configs.serializer.loadb(sch.message)
-            msg = self.configs.loader.load(de_message, Message)
-            for name, arg in msg.arguments.items():
-                msg.arguments[name] = self.configs.loader.load(
-                    arg,
-                    route.func_spec.params_type[name],
-                )
-            bound = route.func_spec.signature.bind(**msg.arguments)
-            builder = route.create_builder(bound)
-            if "cron" in msg.trigger:
-                _ = await builder.cron(**msg.trigger)
-            elif "at" in msg.trigger:
-                _ = await builder.at(**msg.trigger)
-
     async def startup(self) -> None:
         """Initialize the Jobber application.
 
@@ -200,6 +220,7 @@ class Jobber(RootRouter):
         await self.configs.storage.startup()
         await self._propagate_startup(self)
         await self.task.start_pending_crons()
+        await self._restore_schedules()
 
     async def shutdown(self) -> None:
         """Gracefully shut down the Jobber application.

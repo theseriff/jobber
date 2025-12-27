@@ -89,7 +89,7 @@ async def test_cron_shutdown_graceful() -> None:
         await asyncio.sleep(3)
 
     async with jobber:
-        await asyncio.sleep(0.001)
+        await asyncio.sleep(0)
         task = jobber.task._shared_state.pending_tasks.pop()
         _is_cancelled = task.cancel()
 

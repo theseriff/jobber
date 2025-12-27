@@ -114,6 +114,15 @@ class RootRoute(Route[ParamsT, ReturnT]):
             func.__qualname__ = new_qualname
         setattr(module, new_name, func)
 
+    @override
+    def schedule(
+        self,
+        *args: ParamsT.args,
+        **kwargs: ParamsT.kwargs,
+    ) -> ScheduleBuilder[Any]:
+        bound = self.func_spec.signature.bind(*args, **kwargs)
+        return self.create_builder(bound)
+
     def create_builder(
         self,
         bound: inspect.BoundArguments,
@@ -131,15 +140,6 @@ class RootRoute(Route[ParamsT, ReturnT]):
             chain_middleware=self._chain_middleware,
             runnable=Runnable(self._run_strategy, bound),
         )
-
-    @override
-    def schedule(
-        self,
-        *args: ParamsT.args,
-        **kwargs: ParamsT.kwargs,
-    ) -> ScheduleBuilder[Any]:
-        bound = self.func_spec.signature.bind(*args, **kwargs)
-        return self.create_builder(bound)
 
 
 class RootRegistrator(Registrator[RootRoute[..., Any]]):

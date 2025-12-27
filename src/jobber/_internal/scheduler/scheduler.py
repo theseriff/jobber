@@ -180,7 +180,6 @@ class ScheduleBuilder(Generic[ReturnT]):
             storage=self._configs.storage,
         )
         self._shared_state.pending_jobs[job.id] = job
-
         loop = self._configs.getloop()
         delay_seconds = self._calculate_delay_seconds(now=now, at=at)
         if delay_seconds <= 0:

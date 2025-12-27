@@ -1,14 +1,17 @@
 import asyncio
+from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
-from jobber import Cron, Jobber, JobStatus
+from jobber import Cron, Job, Jobber, JobStatus
+from jobber._internal.cron_parser import CronParser
 from jobber._internal.message import Message
 from jobber._internal.storage.abc import ScheduledJob
 from jobber._internal.storage.sqlite import SQLiteStorage
-from tests.conftest import create_cron_factory
+from tests.conftest import create_cron_factory, cron_next_run
 
 
 async def test_sqlite() -> None:
@@ -43,26 +46,29 @@ async def test_sqlite_with_jobber(now: datetime) -> None:
     )
 
     @app.task
-    async def f1() -> str:
-        return "test"
+    async def f1(name: str) -> str:
+        return name
 
     @app.task(durable=False)
     async def f2() -> str:
         return "test"
 
     async with app:
-        job1 = await f1.schedule().delay(0.05, now=now)
+        job1 = await f1.schedule("biba_delay").delay(0.05, now=now)
         job2 = await f2.schedule().delay(0, now=now)
-
         cron = Cron("* * * * *", max_runs=1)
-        job1_cron = await f1.schedule().cron(cron, now=now, job_id="test")
+        job1_cron = await f1.schedule("biba_cron").cron(
+            cron,
+            now=now,
+            job_id="test",
+        )
 
         raw_msg1 = app.configs.serializer.dumpb(
             app.configs.dumper.dump(
                 Message(
                     job_id=job1.id,
                     func_name=f1.name,
-                    arguments={},
+                    arguments={"name": "biba_delay"},
                     trigger={
                         "at": job1.exec_at,
                         "job_id": job1.id,
@@ -77,7 +83,7 @@ async def test_sqlite_with_jobber(now: datetime) -> None:
                 Message(
                     job_id=job1_cron.id,
                     func_name=f1.name,
-                    arguments={},
+                    arguments={"name": "biba_cron"},
                     trigger={"cron": cron, "job_id": job1_cron.id, "now": now},
                 ),
                 Message,
@@ -100,11 +106,69 @@ async def test_sqlite_with_jobber(now: datetime) -> None:
             cron_scheduled,
         ]
         await job1.wait()
+        await job1_cron.wait()
         await job2.wait()
-        assert job1.result() == "test"
+
+        assert job1.result() == "biba_delay"
+        assert job1_cron.result() == "biba_cron"
         assert job2.result() == "test"
         assert await app.configs.storage.get_schedules() == [cron_scheduled]
 
 
-async def test_restore_schedules() -> None:
-    pass
+@pytest.fixture
+def storage() -> Iterator[SQLiteStorage]:
+    s = SQLiteStorage("test_restore.db")
+    yield s
+    s.database.unlink()
+
+
+async def test_restore_schedules(
+    storage: SQLiteStorage,
+    now: datetime,
+) -> None:
+    async def _f(name: str) -> str:
+        return name
+
+    app = Jobber(storage=storage)
+
+    f = app.task(_f, func_name="test_name")
+    async with app:
+        cron = Cron("* * * * *", max_runs=1)
+        job_cron = await f.schedule("biba_cron_restore").cron(
+            cron,
+            job_id="test_cron",
+            now=now,
+        )
+        job_at = await f.schedule("biba_at_restore").delay(0.03, now=now)
+
+    await storage.startup()
+    try:
+        total_scheduled = 2
+        assert len(await storage.get_schedules()) == total_scheduled
+    finally:
+        await storage.shutdown()
+
+    microseconds = int(3e4)  # 0.03 milliseconds
+    cron = Mock(spec=CronParser)
+    cron.next_run.side_effect = cron_next_run(init=microseconds)
+    cron_factory_mock = Mock(return_value=cron)
+
+    app2 = Jobber(storage=storage, cron_factory=cron_factory_mock)
+    _ = app2.task(_f, func_name="test_name")
+
+    async with app2:
+        job_at_restored: Job[str] | None = app2.find_job(job_at.id)
+        job_cron_restored: Job[str] | None = app2.find_job(job_cron.id)
+        assert job_at_restored
+        assert job_cron_restored
+
+        await app2._restore_schedules()
+        expected_jobs = 2
+        assert len(app2.task._shared_state.pending_jobs) == expected_jobs
+        assert job_cron_restored is app2.find_job(job_cron.id)
+
+        await job_at_restored.wait()
+        await job_cron_restored.wait()
+
+        assert job_at_restored.result() == "biba_at_restore"
+        assert job_cron_restored.result() == "biba_cron_restore"

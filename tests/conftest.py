@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from itertools import count
 from typing import Any
 from unittest.mock import AsyncMock, Mock
 from zoneinfo import ZoneInfo
@@ -30,19 +31,21 @@ def amock() -> AsyncMock:
     return mock
 
 
+def cron_next_run(
+    init: int = 10,
+    step: int = 300,
+) -> Callable[[datetime], datetime]:
+    cnt = count(init, step=step)
+
+    def next_run(now: datetime) -> datetime:
+        return now + timedelta(microseconds=next(cnt))
+
+    return next_run
+
+
 def create_cron_factory() -> CronFactory:
-    def scope() -> Callable[[datetime], datetime]:
-        ms = 0
-
-        def now(now: datetime) -> datetime:
-            nonlocal ms
-            ms += 10
-            return now + timedelta(microseconds=ms)
-
-        return now
-
     cron = Mock(spec=CronParser)
-    cron.next_run.side_effect = scope()
+    cron.next_run.side_effect = cron_next_run()
     return Mock(return_value=cron)
 
 
