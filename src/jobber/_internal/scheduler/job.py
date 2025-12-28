@@ -46,7 +46,7 @@ class Job(Generic[ReturnT]):
         self._result: ReturnT = EMPTY
         self._status = job_status
         self._storage = storage
-        self._handle: asyncio.Handle = EMPTY
+        self._handle: asyncio.Handle | None = None
         self.id = job_id
         self.exception: Exception | None = None
         self.cron_expression = cron_expression
@@ -120,6 +120,7 @@ class Job(Generic[ReturnT]):
         await self._storage.delete_schedule(self.id)
 
     def _cancel(self) -> None:
-        _ = self._pending_jobs.pop(self.id, None)
-        self._handle.cancel()
         self._event.set()
+        _ = self._pending_jobs.pop(self.id, None)
+        if self._handle is not None:
+            self._handle.cancel()

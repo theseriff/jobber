@@ -96,9 +96,9 @@ class ScheduleBuilder(Generic[ReturnT]):
         if job_id in self._shared_state.pending_jobs:
             raise DuplicateJobError(job_id)
 
-    def _should_persist(self) -> bool:
+    def _is_persist(self) -> bool:
         return (
-            not isinstance(self._configs.storage, DummyStorage)
+            type(self._configs.storage) is not DummyStorage
             and self.route_options.get("durable", True) is True
         )
 
@@ -111,13 +111,19 @@ class ScheduleBuilder(Generic[ReturnT]):
     ) -> Job[ReturnT]:
         self._ensure_job_id(job_id)
         now = now or self._now()
-
         if isinstance(cron, str):
             cron = Cron(cron)
+        job = self._cron(cron=cron, job_id=job_id, now=now)
 
+        if self._is_persist():
+            trigger = CronArguments(cron=cron, job_id=job_id, now=now)
+            await self._save_scheduled(trigger, job)
+
+        return job
+
+    def _cron(self, *, cron: Cron, job_id: str, now: datetime) -> Job[ReturnT]:
         cron_parser = self._configs.cron_factory(cron.expression)
         at = cron_parser.next_run(now=now)
-
         job = Job(
             exec_at=at,
             job_id=job_id,
@@ -125,18 +131,13 @@ class ScheduleBuilder(Generic[ReturnT]):
             cron_expression=cron.expression,
             storage=self._configs.storage,
         )
+        self._shared_state.pending_jobs[job.id] = job
         cron_ctx = CronContext(job=job, cron=cron, cron_parser=cron_parser)
         delay_seconds = self._calculate_delay_seconds(now=now, at=at)
         loop = self._configs.getloop()
         when = loop.time() + delay_seconds
         handle = loop.call_at(when, self._pre_exec_cron, cron_ctx)
         job.bind_handle(handle)
-        self._shared_state.pending_jobs[job.id] = job
-
-        if self._should_persist():
-            trigger = CronArguments(cron=cron, job_id=job_id, now=now)
-            await self._save_scheduled(trigger, job)
-
         return job
 
     async def delay(
@@ -148,7 +149,7 @@ class ScheduleBuilder(Generic[ReturnT]):
     ) -> Job[ReturnT]:
         now = now or self._now()
         at = now + timedelta(seconds=seconds)
-        return await self._at(at=at, now=now, job_id=job_id)
+        return await self.at(at=at, now=now, job_id=job_id)
 
     async def at(
         self,
@@ -157,22 +158,18 @@ class ScheduleBuilder(Generic[ReturnT]):
         job_id: str | None = None,
         now: datetime | None = None,
     ) -> Job[ReturnT]:
-        return await self._at(
-            at=at,
-            now=now or datetime.now(tz=at.tzinfo),
-            job_id=job_id,
-        )
-
-    async def _at(
-        self,
-        *,
-        at: datetime,
-        now: datetime,
-        job_id: str | None,
-    ) -> Job[ReturnT]:
         job_id = job_id or uuid4().hex
         self._ensure_job_id(job_id)
+        now = now or self._now()
+        job = self._at(at=at, now=now, job_id=job_id)
 
+        if self._is_persist():
+            trigger = AtArguments(at=at, job_id=job_id, now=now)
+            await self._save_scheduled(trigger, job)
+
+        return job
+
+    def _at(self, *, at: datetime, now: datetime, job_id: str) -> Job[ReturnT]:
         job = Job(
             exec_at=at,
             job_id=job_id,
@@ -184,17 +181,9 @@ class ScheduleBuilder(Generic[ReturnT]):
         delay_seconds = self._calculate_delay_seconds(now=now, at=at)
         if delay_seconds <= 0:
             handle = loop.call_soon(self._pre_exec_at, job)
-            job.bind_handle(handle)
-            return job
-
-        when = loop.time() + delay_seconds
-        if self._should_persist():
-            handle = loop.call_at(when, self._pre_exec_at_with_persist, job)
-            trigger = AtArguments(at=at, job_id=job_id, now=now)
-            await self._save_scheduled(trigger, job)
         else:
+            when = loop.time() + delay_seconds
             handle = loop.call_at(when, self._pre_exec_at, job)
-
         job.bind_handle(handle)
         return job
 
@@ -224,29 +213,17 @@ class ScheduleBuilder(Generic[ReturnT]):
         )
         await self._configs.storage.add_schedule(scheduled_job)
 
-    def _pre_exec_at_with_persist(self, job: Job[ReturnT]) -> None:
-        task = asyncio.create_task(
-            self._exec_at_with_persist(job),
-            name=job.id,
-        )
-        self._shared_state.pending_tasks.add(task)
-        task.add_done_callback(self._shared_state.pending_tasks.discard)
-
-    async def _exec_at_with_persist(self, job: Job[ReturnT]) -> None:
-        await self._exec_job(job)
-        _ = self._shared_state.pending_jobs.pop(job.id, None)
-        await self._configs.storage.delete_schedule(job.id)
-        job._event.set()
-
     def _pre_exec_at(self, job: Job[ReturnT]) -> None:
         task = asyncio.create_task(self._exec_at(job), name=job.id)
         self._shared_state.pending_tasks.add(task)
         task.add_done_callback(self._shared_state.pending_tasks.discard)
+        task.add_done_callback(lambda _: job._event.set())
 
     async def _exec_at(self, job: Job[ReturnT]) -> None:
         await self._exec_job(job)
         _ = self._shared_state.pending_jobs.pop(job.id, None)
-        job._event.set()
+        if self._is_persist():
+            await self._configs.storage.delete_schedule(job.id)
 
     def _pre_exec_cron(self, ctx: CronContext[ReturnT]) -> None:
         task = asyncio.create_task(self._exec_cron(ctx=ctx), name=ctx.job.id)

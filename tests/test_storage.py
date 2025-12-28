@@ -1,8 +1,8 @@
 import asyncio
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock, call
 
 import pytest
 
@@ -11,6 +11,7 @@ from jobber._internal.cron_parser import CronParser
 from jobber._internal.message import Message
 from jobber._internal.storage.abc import ScheduledJob
 from jobber._internal.storage.sqlite import SQLiteStorage
+from jobber.serializers import ExtendedJSONSerializer
 from tests.conftest import create_cron_factory, cron_next_run
 
 
@@ -172,3 +173,67 @@ async def test_restore_schedules(
 
         assert job_at_restored.result() == "biba_at_restore"
         assert job_cron_restored.result() == "biba_cron_restore"
+
+
+async def test_restore_schedules_invalid_jobs() -> None:
+    serializer = ExtendedJSONSerializer()
+
+    now = datetime.now(tz=timezone.utc)
+    missing_route_job = ScheduledJob(
+        job_id="job_missing_route",
+        func_name="removed_func",
+        message=serializer.dumpb(
+            Message(
+                job_id="job_missing_route",
+                func_name="removed_func",
+                arguments={},
+                trigger={"at": now, "job_id": "job_missing_route", "now": now},
+            )
+        ),
+        status=JobStatus.SCHEDULED,
+    )
+    invalid_payload_job = ScheduledJob(
+        job_id="corrupted_data_001",
+        func_name="any_func",
+        message=b"invalid { json: [data",
+        status=JobStatus.SCHEDULED,
+    )
+    invalid_argument_job = ScheduledJob(
+        job_id="job_unexpected_arguments",
+        func_name="test",
+        message=serializer.dumpb(
+            Message(
+                job_id="job_unexpected_arguments",
+                func_name="job_unexpected_arguments",
+                arguments={"name": "biba_cron"},
+                trigger={
+                    "cron": Cron("* * * * *"),
+                    "job_id": "job_unexpected_arguments",
+                    "now": datetime.now(tz=timezone.utc),
+                },
+            )
+        ),
+        status=JobStatus.SCHEDULED,
+    )
+    mock_storage = AsyncMock()
+    mock_storage.get_schedules.return_value = [
+        missing_route_job,
+        invalid_payload_job,
+        invalid_argument_job,
+    ]
+    mock_storage.delete_schedule = AsyncMock()
+
+    app = Jobber(storage=mock_storage)
+
+    @app.task(func_name="job_unexpected_arguments")
+    def _() -> None:
+        pass
+
+    await app._restore_schedules()
+    mock_storage.delete_schedule.assert_has_awaits(
+        [
+            call("job_missing_route"),
+            call("corrupted_data_001"),
+            call("job_unexpected_arguments"),
+        ],
+    )

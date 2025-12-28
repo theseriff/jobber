@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import logging
 from typing import TYPE_CHECKING, Literal, ParamSpec, TypeVar
 from zoneinfo import ZoneInfo
 
@@ -42,6 +43,8 @@ if TYPE_CHECKING:
 AppT = TypeVar("AppT", bound="Jobber")
 ReturnT = TypeVar("ReturnT")
 ParamsT = ParamSpec("ParamsT")
+
+logger = logging.getLogger("Jobber")
 
 
 def cache_result(f: Callable[ParamsT, ReturnT]) -> Callable[ParamsT, ReturnT]:
@@ -130,13 +133,35 @@ class Jobber(RootRouter):
     async def _restore_schedules(self) -> None:
         schedules = await self.configs.storage.get_schedules()
         for sch in schedules:
-            if sch.job_id in self.task._shared_state.pending_jobs:
+            if self.find_job(sch.job_id):
+                msg = (
+                    f"Job {sch.job_id} is already active (code defined)."
+                    "Skipping DB restore."
+                )
+                logger.debug(msg)
                 continue
-            de_message = self.configs.serializer.loadb(sch.message)
-            msg = self.configs.loader.load(de_message, Message)
-            await self._feed_message(msg)
+            try:
+                await self._feed_message(sch.message)
+            except (KeyError, TypeError, ValueError) as exc:
+                # KeyError: The function has been removed from the router
+                #   (the code has changed).
+                # TypeError: The arguments in the database do not match the new
+                #   function signature.
+                # ValueError: Serializer error.
+                msg = (
+                    f"Cannot restore job {sch.job_id} ({sch.func_name}). "
+                    f"Exception Type: {type(exc)}. "
+                    f"Reason: {exc}. Removing from storage."
+                )
+                logger.warning(msg)
+                await self.configs.storage.delete_schedule(sch.job_id)
+            except Exception:  # pragma: no cover
+                msg = f"Unexpected error restoring job {sch.job_id}"
+                logger.exception(msg)
 
-    async def _feed_message(self, msg: Message) -> None:
+    async def _feed_message(self, raw_msg: bytes) -> None:
+        de_message = self.configs.serializer.loadb(raw_msg)
+        msg = self.configs.loader.load(de_message, Message)
         route = self.task._routes[msg.func_name]
         for name, arg in msg.arguments.items():
             msg.arguments[name] = self.configs.loader.load(
@@ -146,9 +171,9 @@ class Jobber(RootRouter):
         bound = route.func_spec.signature.bind(**msg.arguments)
         builder = route.create_builder(bound)
         if "cron" in msg.trigger:
-            _ = await builder.cron(**msg.trigger)
+            _ = builder._cron(**msg.trigger)
         else:
-            _ = await builder.at(**msg.trigger)
+            _ = builder._at(**msg.trigger)
 
     def find_job(self, id_: str, /) -> Job[ReturnT] | None:
         """Find an active job by its ID.
@@ -219,7 +244,7 @@ class Jobber(RootRouter):
         self.configs.app_started = True
         await self.configs.storage.startup()
         await self._propagate_startup(self)
-        await self.task.start_pending_crons()
+        self.task.start_pending_crons()
         await self._restore_schedules()
 
     async def shutdown(self) -> None:

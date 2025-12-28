@@ -1,4 +1,6 @@
+import functools
 import sqlite3
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
@@ -63,6 +65,7 @@ class SQLiteStorage(Storage):
         self.getloop: LoopFactory = EMPTY
         self.threadpool: ThreadPoolExecutor | None = EMPTY
         self._conn: sqlite3.Connection | None = None
+        self._lock: threading.Lock = threading.Lock()
 
         self.create_scheduled_table_query: str = (
             CREATE_SCHEDULED_TABLE_QUERY.format(table_name)
@@ -85,8 +88,13 @@ class SQLiteStorage(Storage):
         return self._conn
 
     async def _to_thread(self, func: Callable[[], ReturnT]) -> ReturnT:
+        @functools.wraps(func)
+        def thread_safe() -> ReturnT:
+            with self._lock:
+                return func()
+
         loop = self.getloop()
-        return await loop.run_in_executor(self.threadpool, func)
+        return await loop.run_in_executor(self.threadpool, thread_safe)
 
     @override
     async def startup(self) -> None:

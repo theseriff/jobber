@@ -1,8 +1,9 @@
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 
 import pytest
 
+from jobber import Job
 from jobber._internal.common.constants import JobStatus
 from jobber._internal.exceptions import DuplicateJobError
 from tests.conftest import create_app
@@ -28,6 +29,7 @@ async def test_job() -> None:
     assert job2.is_done()
     assert job2.status is JobStatus.CANCELLED
     assert job2.id not in job2._pending_jobs
+    assert job2._handle
     assert job2._handle.cancelled()
 
 
@@ -66,3 +68,14 @@ async def test_duplicate_job_error(amock: AsyncMock) -> None:
         match = "Job with ID 'test' is already scheduled."
         with pytest.raises(DuplicateJobError, match=match):
             _ = await f.schedule().delay(0, job_id="test")
+
+
+async def test_job_handle_not_set() -> None:
+    job = Job[None](
+        job_id=ANY,
+        exec_at=ANY,
+        pending_jobs={},
+        job_status=JobStatus.SCHEDULED,
+        storage=ANY,
+    )
+    job._cancel()

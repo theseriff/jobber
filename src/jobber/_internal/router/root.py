@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import functools
 import sys
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast, get_type_hints
@@ -197,18 +196,15 @@ class RootRegistrator(Registrator[RootRoute[..., Any]]):
         if cron := options.get("cron"):
             if isinstance(cron, str):
                 cron = Cron(cron)
-            p = (route, route.name, cron)  # route.name as job_id
+            p = (route, cron, route.name)  # route.name as job_id
             self.state.setdefault(PENDING_CRON_JOBS, []).append(p)
 
         return route
 
-    async def start_pending_crons(self) -> None:
-        if crons := self.state.pop(PENDING_CRON_JOBS, []):
-            pending = (
-                route.schedule().cron(cron, job_id=job_id)
-                for route, job_id, cron in crons
-            )
-            _ = await asyncio.gather(*pending)
+    def start_pending_crons(self) -> None:
+        for route, cron, func_name in self.state.pop(PENDING_CRON_JOBS, []):
+            builder = route.schedule()
+            builder._cron(cron=cron, job_id=func_name, now=builder._now())
 
 
 class RootRouter(Router):

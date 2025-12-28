@@ -5,9 +5,8 @@
 
 ---
 
-**Jobber** is a good program for doing things behind the scenes in Python. You can use it to make a lot of things happen at the same time. It has a good architecture for making, doing, and keeping jobs. It can work with different engines, middlewares, and ways to save things.
-
-Jobber is strong and made to do things that don't happen together. It has an easy and new API like other good programs.
+**Jobber** is a powerful and flexible framework for scheduling and managing background tasks in Python. It offers a versatile architecture for defining, executing, and storing jobs, supporting a variety of execution engines, middleware, and serialization formats.
+**Jobber** is a robust solution that was built from the ground up to handle asynchronous tasks. It offers a clean and modern API that is inspired by leading frameworks.
 
 ## Key features
 
