@@ -114,6 +114,21 @@ branch = true
 concurrency = ["thread", "multiprocessing"]
 source = ["src", "tests"]
 omit = ["**/__init__.py"]
+dynamic_context = "test_function"
+
+[tool.coverage.paths]
+source = [
+    "src",
+    "/home/runner/work/jobber/jobber/src",
+    "/Users/runner/work/jobber/jobber/src",
+    "D:\\a\\jobber\\jobber\\src",
+]
+tests = [
+    "tests",
+    "/home/runner/work/jobber/jobber/tests",
+    "/Users/runner/work/jobber/jobber/tests",
+    "D:\\a\\jobber\\jobber\\tests",
+]
 
 [tool.coverage.report]
 fail_under = 95
