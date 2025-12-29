@@ -11,8 +11,6 @@ on:
       - develop
     paths:
       - src/**
-      - tests/**
-      - pyproject.toml
   schedule:
     - cron: "39 20 * * 0"
 

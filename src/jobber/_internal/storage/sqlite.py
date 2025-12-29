@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, TypeVar
 
 from typing_extensions import override
 
-from jobber._internal.common.constants import EMPTY
 from jobber._internal.storage.abc import ScheduledJob, Storage
 
 if TYPE_CHECKING:
@@ -62,8 +61,8 @@ class SQLiteStorage(Storage):
         )
         self.table_name: str = table_name
         self.timeout: float = timeout
-        self.getloop: LoopFactory = EMPTY
-        self.threadpool: ThreadPoolExecutor | None = EMPTY
+        self.getloop: LoopFactory
+        self.threadpool: ThreadPoolExecutor | None
         self._conn: sqlite3.Connection | None = None
         self._lock: threading.Lock = threading.Lock()
 
