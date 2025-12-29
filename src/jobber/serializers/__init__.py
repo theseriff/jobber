@@ -18,13 +18,14 @@ Security Notes:
 
 """  # noqa: E501
 
-from jobber._internal.serializers.base import JobsSerializer, SerializableTypes
+from jobber._internal.serializers.base import Serializer
 from jobber._internal.serializers.json import JSONSerializer
+from jobber._internal.serializers.json_extended import ExtendedJSONSerializer
 from jobber._internal.serializers.pickle_unsafe import UnsafePickleSerializer
 
 __all__ = (
+    "ExtendedJSONSerializer",
     "JSONSerializer",
-    "JobsSerializer",
-    "SerializableTypes",
+    "Serializer",
     "UnsafePickleSerializer",
 )

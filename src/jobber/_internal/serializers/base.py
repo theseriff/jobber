@@ -1,27 +1,24 @@
 from __future__ import annotations
 
 from abc import ABCMeta, abstractmethod
-from typing import Protocol, TypeAlias
+from typing import Any, Protocol, TypeAlias
 
-SerializableTypes: TypeAlias = (
-    None
-    | bool
+JSONCompat: TypeAlias = (
+    dict[str, "JSONCompat"]
+    | list["JSONCompat"]
+    | str
     | int
     | float
-    | str
-    | bytes
-    | set["SerializableTypes"]
-    | list["SerializableTypes"]
-    | tuple["SerializableTypes", ...]
-    | dict[str, "SerializableTypes"]
+    | bool
+    | None
 )
 
 
-class JobsSerializer(Protocol, metaclass=ABCMeta):
+class Serializer(Protocol, metaclass=ABCMeta):
     @abstractmethod
-    def dumpb(self, data: SerializableTypes) -> bytes:
+    def dumpb(self, data: Any) -> bytes:  # noqa: ANN401
         raise NotImplementedError
 
     @abstractmethod
-    def loadb(self, data: bytes) -> SerializableTypes:
+    def loadb(self, data: bytes) -> Any:  # noqa: ANN401
         raise NotImplementedError

@@ -1,10 +1,11 @@
 from enum import Enum, unique
-from typing import Any, cast
+from typing import Any
 
 from jobber._internal.common.datastructures import EmptyPlaceholder
 
 EMPTY: Any = EmptyPlaceholder()
-INFINITY = cast("int", float("inf"))
+INFINITY = -1
+PATCH_SUFFIX = "__jobber_original"
 
 
 @unique

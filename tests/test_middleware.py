@@ -1,17 +1,20 @@
-# ruff: noqa: ANN401
 import asyncio
 from typing import Any
 from unittest import mock
 from unittest.mock import call
 
-from jobber import Jobber, JobContext, JobStatus
+from typing_extensions import override
+
+from jobber import JobContext, JobStatus
 from jobber.middleware import BaseMiddleware, CallNext
+from tests.conftest import create_app
 
 
 class MyMiddleware(BaseMiddleware):
     def __init__(self) -> None:
         self.skip: bool = False
 
+    @override
     async def __call__(self, call_next: CallNext, context: JobContext) -> Any:
         if self.skip:
             return None
@@ -20,7 +23,7 @@ class MyMiddleware(BaseMiddleware):
 
 
 async def test_common_case(amock: mock.AsyncMock) -> None:
-    jobber = Jobber()
+    jobber = create_app()
     jobber.add_middleware(MyMiddleware())
     f = jobber.task(amock)
 
@@ -37,7 +40,7 @@ async def test_common_case(amock: mock.AsyncMock) -> None:
 
 
 async def test_exception() -> None:
-    jobber = Jobber()
+    jobber = create_app()
 
     @jobber.task
     async def f1() -> None:
@@ -58,8 +61,8 @@ async def test_exception() -> None:
         await job1.wait()
         await job2.wait()
 
-    sync_handler.assert_called_once_with(mock.ANY, job1.exception)
-    async_handler.assert_awaited_once_with(mock.ANY, job2.exception)
+    sync_handler.assert_called_once_with(job1.exception, mock.ANY)
+    async_handler.assert_awaited_once_with(job2.exception, mock.ANY)
 
 
 @mock.patch("asyncio.sleep", spec=asyncio.sleep)
@@ -71,7 +74,7 @@ async def test_retry(
     amock.side_effect = ValueError
 
     retry = 3
-    jobber = Jobber()
+    jobber = create_app()
     f = jobber.task(amock, retry=retry)
     async with jobber:
         job = await f.schedule().delay(0)

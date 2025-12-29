@@ -1,26 +1,30 @@
-# pyright: reportExplicitAny=false
-from typing import Any
+import inspect
+from typing import Any, no_type_check
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from typing_extensions import override
 
 from jobber import INJECT, Job, Jobber, JobContext, State
 from jobber._internal.common.constants import EMPTY
 from jobber._internal.common.datastructures import RequestState
 from jobber._internal.injection import inject_context
-from jobber._internal.runner.runners import Runnable, create_run_strategy
+from jobber._internal.runners import Runnable, create_run_strategy
 from jobber.exceptions import JobFailedError
 from jobber.middleware import BaseMiddleware, CallNext
+from tests.conftest import create_app
 
 
 class _MyMiddleware(BaseMiddleware):
-    async def __call__(self, call_next: CallNext, context: JobContext) -> Any:  # noqa: ANN401
+    @override
+    async def __call__(self, call_next: CallNext, context: JobContext) -> Any:
         context.request_state.test = 1
         return await call_next(context)
 
 
 async def test_injection() -> None:
-    jobber = Jobber(middleware=[_MyMiddleware()])
+    jobber = create_app()
+    jobber.add_middleware(_MyMiddleware())
 
     job_id: str | None = None
     request_test_num: int | None = None
@@ -54,10 +58,11 @@ async def test_injection() -> None:
 
 
 async def test_injection_wrong_usage() -> None:
-    jobber = Jobber()
+    jobber = create_app()
 
     @jobber.task
-    async def untyped_func(_job=INJECT) -> None:  # type: ignore[no-untyped-def] # pyright: ignore[reportMissingParameterType]  # noqa: ANN001
+    @no_type_check
+    async def untyped_func(_job=INJECT) -> None:  # noqa: ANN001
         pass
 
     @jobber.task
@@ -80,9 +85,15 @@ async def test_inject_context_skips_non_inject_parameters(
     amock: AsyncMock,
 ) -> None:
     strategy = create_run_strategy(amock, Mock(), mode=Mock())
-    runnable = Runnable(strategy, Mock(), Mock(), normal_param="test")
-    inject_context(runnable, Mock(spec=JobContext))
+
+    bound = inspect.signature(amock).bind(normal_param="test")
+    runnable = Runnable(strategy, bound)
+
+    mock_context = Mock(spec=JobContext)
+    mock_context.runnable = runnable
+
+    inject_context(mock_context)
     result = await runnable()
 
     amock.assert_awaited_once_with(normal_param="test")
-    assert runnable.kwargs.get("normal_param") == "test" == result
+    assert runnable.bound.kwargs.get("normal_param") == "test" == result

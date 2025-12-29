@@ -3,6 +3,8 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 
+from typing_extensions import override
+
 from jobber._internal.router.base import Registrator, Route, Router
 
 if TYPE_CHECKING:
@@ -12,7 +14,7 @@ if TYPE_CHECKING:
     from jobber._internal.common.types import Lifespan
     from jobber._internal.configuration import RouteOptions
     from jobber._internal.middleware.base import BaseMiddleware
-    from jobber._internal.runner.scheduler import ScheduleBuilder
+    from jobber._internal.scheduler.scheduler import ScheduleBuilder
 
 
 ReturnT = TypeVar("ReturnT")
@@ -33,6 +35,7 @@ class NodeRoute(Route[ParamsT, ReturnT]):
     def bind(self, route: Route[ParamsT, ReturnT]) -> None:
         self._real_route = route
 
+    @override
     def schedule(
         self,
         *args: ParamsT.args,
@@ -56,18 +59,17 @@ class NodeRegistrator(Registrator[NodeRoute[..., Any]]):
     ) -> None:
         super().__init__(state, lifespan, middleware)
 
+    @override
     def register(
         self,
         name: str,
         func: Callable[ParamsT, ReturnT],
         options: RouteOptions,
     ) -> NodeRoute[ParamsT, ReturnT]:
-        if self._routes.get(name) is None:
-            route = NodeRoute(name, func, options)
-            _ = functools.update_wrapper(route, func)
-            self._routes[name] = route
-
-        return cast("NodeRoute[ParamsT, ReturnT]", self._routes[name])
+        route = NodeRoute(name, func, options)
+        _ = functools.update_wrapper(route, func)
+        self._routes[name] = route
+        return route
 
 
 class NodeRouter(Router):
@@ -86,13 +88,16 @@ class NodeRouter(Router):
         )
 
     @property
+    @override
     def task(self) -> NodeRegistrator:
         return self._registrator
 
     @property
+    @override
     def routes(self) -> Iterator[NodeRoute[..., Any]]:
         yield from self.task._routes.values()
 
     @property
+    @override
     def sub_routers(self) -> list[NodeRouter]:
         return cast("list[NodeRouter]", self._sub_routers)

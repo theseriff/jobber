@@ -1,17 +1,18 @@
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 
 import pytest
 
-from jobber import Jobber
+from jobber import Job
 from jobber._internal.common.constants import JobStatus
 from jobber._internal.exceptions import DuplicateJobError
+from tests.conftest import create_app
 
 
 async def test_job() -> None:
-    jobber = Jobber()
+    jobber = create_app()
 
-    @jobber.task(name="t")
+    @jobber.task(func_name="t")
     def t(num: int) -> int:
         return num + 1
 
@@ -27,12 +28,13 @@ async def test_job() -> None:
     assert str(job2).startswith(f"Job(instance_id={id(job2)}")
     assert job2.is_done()
     assert job2.status is JobStatus.CANCELLED
-    assert job2.id not in job2._jobs_registry
-    assert job2._timer_handler.cancelled()
+    assert job2.id not in job2._pending_jobs
+    assert job2._handle
+    assert job2._handle.cancelled()
 
 
 async def test_all_jobs_completed(amock: AsyncMock) -> None:
-    app = Jobber()
+    app = create_app()
     f = app.task(amock)
 
     async with app:
@@ -42,7 +44,7 @@ async def test_all_jobs_completed(amock: AsyncMock) -> None:
 
         await app.wait_all()
 
-        assert len(app.jobber_config._jobs_registry) == 0
+        assert len(app.task._shared_state.pending_jobs) == 0
 
         _ = await f.schedule().delay(10)
         _ = await f.schedule().delay(10)
@@ -52,11 +54,13 @@ async def test_all_jobs_completed(amock: AsyncMock) -> None:
             await app.wait_all(timeout=0)
 
         expected_planned_jobs = 3
-        assert len(app.jobber_config._jobs_registry) == expected_planned_jobs
+        assert (
+            len(app.task._shared_state.pending_jobs) == expected_planned_jobs
+        )
 
 
 async def test_duplicate_job_error(amock: AsyncMock) -> None:
-    app = Jobber()
+    app = create_app()
     f = app.task(amock)
     async with app:
         _ = await f.schedule().delay(0, job_id="test")
@@ -64,3 +68,14 @@ async def test_duplicate_job_error(amock: AsyncMock) -> None:
         match = "Job with ID 'test' is already scheduled."
         with pytest.raises(DuplicateJobError, match=match):
             _ = await f.schedule().delay(0, job_id="test")
+
+
+async def test_job_handle_not_set() -> None:
+    job = Job[None](
+        job_id=ANY,
+        exec_at=ANY,
+        pending_jobs={},
+        job_status=JobStatus.SCHEDULED,
+        storage=ANY,
+    )
+    job._cancel()

@@ -5,7 +5,9 @@ import inspect
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Final, Generic, ParamSpec, TypeVar, final
+from typing import TYPE_CHECKING, Final, Generic, ParamSpec, TypeVar
+
+from typing_extensions import override
 
 from jobber._internal.common.constants import RunMode
 
@@ -36,6 +38,7 @@ class RunStrategy(ABC, Generic[ParamsT, ReturnT]):
 
 
 class SyncStrategy(RunStrategy[ParamsT, ReturnT]):
+    @override
     async def __call__(
         self,
         *args: ParamsT.args,
@@ -45,6 +48,7 @@ class SyncStrategy(RunStrategy[ParamsT, ReturnT]):
 
 
 class AsyncStrategy(RunStrategy[ParamsT, ReturnT]):
+    @override
     async def __call__(
         self: AsyncStrategy[ParamsT, Awaitable[ReturnT]],
         *args: ParamsT.args,
@@ -54,26 +58,41 @@ class AsyncStrategy(RunStrategy[ParamsT, ReturnT]):
 
 
 class PoolStrategy(RunStrategy[ParamsT, ReturnT]):
-    __slots__: tuple[str, ...] = ("executor", "loop_factory")
+    __slots__: tuple[str, ...] = ("executor", "getloop")
 
     def __init__(
         self,
         func: Callable[ParamsT, ReturnT],
         executor: Executor | None,
-        loop_factory: LoopFactory,
+        getloop: LoopFactory,
     ) -> None:
         super().__init__(func)
         self.executor: Executor | None = executor
-        self.loop_factory: LoopFactory = loop_factory
+        self.getloop: LoopFactory = getloop
 
+    @override
     async def __call__(
         self,
         *args: ParamsT.args,
         **kwargs: ParamsT.kwargs,
     ) -> ReturnT:
-        loop = self.loop_factory()
         func_call = functools.partial(self.func, *args, **kwargs)
-        return await loop.run_in_executor(self.executor, func_call)
+        return await self.getloop().run_in_executor(self.executor, func_call)
+
+
+class Runnable(Generic[ReturnT]):
+    __slots__: tuple[str, ...] = ("bound", "strategy")
+
+    def __init__(
+        self,
+        strategy: RunStrategy[ParamsT, ReturnT],
+        bound: inspect.BoundArguments,
+    ) -> None:
+        self.strategy: Final = strategy
+        self.bound: inspect.BoundArguments = bound
+
+    def __call__(self) -> Awaitable[ReturnT]:
+        return self.strategy(*self.bound.args, **self.bound.kwargs)
 
 
 def _validate_run_mode(mode: RunMode | None, *, is_async: bool) -> RunMode:
@@ -104,42 +123,12 @@ def create_run_strategy(
     if is_async:
         return AsyncStrategy(func)
 
-    loop_factory = jobber_config.loop_factory
     match mode:
         case RunMode.PROCESS:
             processpool = jobber_config.worker_pools.processpool
-            return PoolStrategy(func, processpool, loop_factory)
+            return PoolStrategy(func, processpool, jobber_config.getloop)
         case RunMode.THREAD:
             threadpool = jobber_config.worker_pools.threadpool
-            return PoolStrategy(func, threadpool, loop_factory)
+            return PoolStrategy(func, threadpool, jobber_config.getloop)
         case _:
             return SyncStrategy(func)
-
-
-@final
-class Runnable(Generic[ReturnT]):
-    __slots__: tuple[str, ...] = (
-        "args",
-        "kwargs",
-        "raw_args",
-        "raw_kwargs",
-        "strategy",
-    )
-
-    def __init__(
-        self,
-        strategy: RunStrategy[ParamsT, ReturnT],
-        /,
-        raw_args: bytes,
-        raw_kwargs: bytes,
-        *args: ParamsT.args,
-        **kwargs: ParamsT.kwargs,
-    ) -> None:
-        self.strategy = strategy
-        self.args = args
-        self.kwargs = kwargs
-        self.raw_args = raw_args
-        self.raw_kwargs = raw_kwargs
-
-    def __call__(self) -> Awaitable[ReturnT]:
-        return self.strategy(*self.args, **self.kwargs)

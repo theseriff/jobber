@@ -4,21 +4,22 @@ import multiprocessing
 import sys
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, TypedDict
+
+from typing_extensions import NotRequired
 
 from jobber._internal.common.constants import INFINITY
 
 if TYPE_CHECKING:
-    import asyncio
     from collections.abc import Mapping
     from zoneinfo import ZoneInfo
 
     from jobber._internal.common.constants import RunMode
     from jobber._internal.common.types import LoopFactory
-    from jobber._internal.cron_parser import FactoryCron
-    from jobber._internal.runner.job import Job
-    from jobber._internal.serializers.base import JobsSerializer
-    from jobber._internal.storage.abc import JobRepository
+    from jobber._internal.cron_parser import CronFactory
+    from jobber._internal.serializers.base import Serializer
+    from jobber._internal.storage.abc import Storage
+    from jobber._internal.typeadapter.base import Dumper, Loader
 
 
 @dataclass(slots=True, kw_only=True)
@@ -47,18 +48,15 @@ class WorkerPools:
 
 @dataclass(slots=True, kw_only=True)
 class JobberConfiguration:
-    loop_factory: LoopFactory
     tz: ZoneInfo
-    durable: JobRepository
+    dumper: Dumper
+    loader: Loader
+    storage: Storage
+    getloop: LoopFactory
+    serializer: Serializer
     worker_pools: WorkerPools
-    serializer: JobsSerializer
-    factory_cron: FactoryCron
+    cron_factory: CronFactory
     app_started: bool = False
-    _jobs_registry: dict[str, Job[Any]]
-    _tasks_registry: set[asyncio.Task[Any]]
-
-    def close(self) -> None:
-        self.worker_pools.close()
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
@@ -76,11 +74,11 @@ class Cron:
             raise ValueError(msg)
 
 
-class RouteOptions(NamedTuple):
-    retry: int
-    timeout: float
-    run_mode: RunMode | None
-    durable: bool | None
-    name: str | None
-    cron: Cron | None
-    metadata: Mapping[str, Any] | None
+class RouteOptions(TypedDict):
+    func_name: NotRequired[str]
+    cron: NotRequired[Cron | str]
+    retry: NotRequired[int]
+    timeout: NotRequired[float]
+    durable: NotRequired[bool]
+    run_mode: NotRequired[RunMode]
+    metadata: NotRequired[Mapping[str, Any]]

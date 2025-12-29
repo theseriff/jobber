@@ -8,8 +8,8 @@ module-root = "src"
 [project]
 name = "jobber"
 version = "0.1.0"
-description = "A modern, lightweight and robust task manager with a user-friendly interface, using the low-level asyncio API and more."
-requires-python = ">=3.10"
+description = "This is a modern, light and strong task manager with an easy-to-use interface. It uses the low-level asyncio API."
+requires-python = ">=3.10,<5"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
@@ -52,6 +52,7 @@ classifiers = [
 dependencies = [
     "crontab==1.0.5",
     "tzdata==2025.2; sys_platform == 'win32'",
+    "typing-extensions>=4.12.0",
 ]
 
 [dependency-groups]
@@ -68,12 +69,12 @@ lint = [
     "types-setuptools",
 ]
 test = [
-    "coverage[toml]==7.12.0",
     "pytest==8.4.2",
     "pytest-asyncio==1.3.0",
     "pytest-timeout>=2.4.0",
     "pytest-cov>=6.2.1",
     "covdefaults>=2.3.0",
+    "coverage[toml]==7.12.0",
 ]
 docs = [
     "zensical==0.0.10",
@@ -136,10 +137,9 @@ omit = [
 include = ["src", "tests"]
 ignore = ["**/__pycache__", "**/alembic"]
 pythonVersion = "3.10"
-reportImplicitOverride = false
-reportPrivateUsage = false
 reportAny = false
 reportExplicitAny = false
+reportPrivateUsage = false
 
 [tool.mypy]
 mypy_path = "src"
@@ -208,7 +208,10 @@ skip = "*.pyi,*.pyc,./site"
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 commit_parser = "conventional"
-build_command = "uv build"
+build_command = "uv lock --upgrade-package jobber && uv build"
+tag_format = "v{version}"
+major_on_zero = false
+allow_zero_version = true
 
 [tool.semantic_release.commit_parser_options]
 minor_tags = ["feat"]
@@ -231,3 +234,7 @@ exclude_commit_patterns = [
     '''build\((?!deps\): .+)''',
     '''Initial [Cc]ommit.*''', # codespell:ignore ommit
 ]
+
+[tool.semantic_release.publish]
+dist_glob_patterns = ["dist/*"]
+upload_to_vcs_release = true

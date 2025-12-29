@@ -47,8 +47,8 @@ async def test_jobber(  # noqa: PLR0913
     expected: int,
     run_mode: RunMode,
 ) -> None:
-    f1_reg = node.task(f1, name="f1_reg", run_mode=run_mode)
-    f2_reg = node.task(f2, name="f2_reg", run_mode=run_mode)
+    f1_reg = node.task(f1, func_name="f1_reg", run_mode=run_mode)
+    f2_reg = node.task(f2, func_name="f2_reg", run_mode=run_mode)
     if type(node) is Jobber:
         app = node
     else:
@@ -62,16 +62,12 @@ async def test_jobber(  # noqa: PLR0913
             job_sync = await f1_reg.schedule(num).delay(0, now=now)
             job_async = await f2_reg.schedule(num).delay(0, now=now)
         elif method == "cron":
-            exp = "* * * * *"
+            cron = Cron("* * * * *", max_runs=1)
             job_sync = await f1_reg.schedule(num).cron(
-                exp,
-                job_id="test1",
-                now=now,
+                cron, job_id="test1", now=now
             )
             job_async = await f2_reg.schedule(num).cron(
-                Cron(exp, max_runs=1),
-                job_id="test2",
-                now=now,
+                cron, job_id="test2", now=now
             )
         else:
             raise NotImplementedError
@@ -80,5 +76,5 @@ async def test_jobber(  # noqa: PLR0913
 
     assert job_sync.result() == expected
     assert job_async.result() == expected
-    assert len(app.jobber_config._tasks_registry) == 0
-    assert len(app.jobber_config._jobs_registry) == 0
+    assert app.task._shared_state.pending_jobs == {}
+    assert app.task._shared_state.pending_tasks == set()

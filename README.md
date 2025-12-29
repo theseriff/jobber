@@ -6,17 +6,15 @@
 ---
 
 **Jobber** is a powerful and flexible framework for scheduling and managing background tasks in Python. It offers a versatile architecture for defining, executing, and storing jobs, supporting a variety of execution engines, middleware, and serialization formats.
+**Jobber** is a robust solution that was built from the ground up to handle asynchronous tasks. It offers a clean and modern API that is inspired by leading frameworks.
 
-Jobber is a robust solution that was built from the ground up to handle asynchronous tasks. It offers a clean and modern API that is inspired by leading frameworks.
+## Key features
 
-## Features
-
-- **Cron**: Jobber supports cron expressions with an optional seventh field for seconds (`* * * * * * *`) to schedule jobs with high precision and for high-frequency tasks.
-- **Context Dependency Injection**: Simplify your job by automatically injecting dependencies from a shared context.
-- **Lifespan Events**: Effectively manage resources with startup and shutdown events. These are useful for initializing and cleaning up resources, such as database connections, or sending a notification when the application starts or stops.
-- **Middleware Support**: Jobber offers a flexible middleware processing pipeline that allows you to add custom logic before or after a job is executed. This can be useful for things like logging, authentication, or performance monitoring. The API is similar to that of frameworks like Starlette and aiogram, providing a powerful tool for customizing job execution.
-- **Flexible Exception Handling**: Avoid application crashes due to a single failed job. Create custom exception handlers for various error types, enabling more detailed and flexible error handling strategies. You can record the error, try the task again, or notify the developers.
-- **Full-Time Zone Support**: Let's make time zones less of a headache. We can schedule jobs reliably for users in different regions, considering their local time zones. With Jobber, it's easy to schedule jobs in any time zone and convert between them.
+- **Routing**: There are routers like in fastAPI/Starlette/Aiogram.
+- **Schedule**: For cron, add two extra optional fields, `* * * * * * *`, for the second interval.
+- **Lifespan**: The lifespan of the application is similar to that of FastAPI/Starlette.
+- **Middleware**: Middleware such as fastAPI/Starlette/Aiogram.
+- **Exception Handling**: Exception handling using fastAPI/Starlette.
 
 ---
 

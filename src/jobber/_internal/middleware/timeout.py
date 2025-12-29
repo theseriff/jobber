@@ -4,6 +4,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from typing_extensions import override
+
 from jobber._internal.exceptions import JobTimeoutError
 from jobber._internal.middleware.base import BaseMiddleware, CallNext
 
@@ -14,8 +16,12 @@ logger = logging.getLogger("jobber.middleware")
 
 
 class TimeoutMiddleware(BaseMiddleware):
-    async def __call__(self, call_next: CallNext, context: JobContext) -> Any:  # noqa: ANN401
-        timeout = context.route_config.timeout
+    @override
+    async def __call__(self, call_next: CallNext, context: JobContext) -> Any:
+        timeout = context.route_options.get("timeout")
+        if timeout is None:
+            return await call_next(context)
+
         try:
             return await asyncio.wait_for(call_next(context), timeout=timeout)
         except asyncio.TimeoutError as exc:

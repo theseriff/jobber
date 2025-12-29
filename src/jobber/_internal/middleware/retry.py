@@ -4,6 +4,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from typing_extensions import override
+
 from jobber._internal.middleware.base import BaseMiddleware, CallNext
 
 if TYPE_CHECKING:
@@ -13,9 +15,13 @@ logger = logging.getLogger("jobber.middleware")
 
 
 class RetryMiddleware(BaseMiddleware):
-    async def __call__(self, call_next: CallNext, context: JobContext) -> Any:  # noqa: ANN401
-        max_retries = context.route_config.retry
+    @override
+    async def __call__(self, call_next: CallNext, context: JobContext) -> Any:
         failures = 0
+        max_retries = context.route_options.get("retry")
+        if max_retries is None:
+            return await call_next(context)
+
         while True:
             try:
                 return await call_next(context)

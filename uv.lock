@@ -513,6 +513,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "crontab" },
+    { name = "typing-extensions" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
 
@@ -563,6 +564,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "crontab", specifier = "==1.0.5" },
+    { name = "typing-extensions", specifier = ">=4.12.0" },
     { name = "tzdata", marker = "sys_platform == 'win32'", specifier = "==2025.2" },
 ]
 

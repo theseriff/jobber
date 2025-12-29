@@ -3,17 +3,15 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Generic, TypeVar, final
 
+from typing_extensions import override
+
 from jobber._internal.common.constants import EMPTY, JobStatus
 from jobber._internal.exceptions import JobFailedError, JobNotCompletedError
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-ASYNC_FUNC_IGNORED_WARNING = """\
-Method {name!r} is ignored for async functions. \
-Use it only with synchronous functions. \
-Async functions are already executed in the event loop.
-"""
+    from jobber._internal.storage.abc import Storage
 
 ReturnT = TypeVar("ReturnT")
 
@@ -21,17 +19,16 @@ ReturnT = TypeVar("ReturnT")
 @final
 class Job(Generic[ReturnT]):
     __slots__: tuple[str, ...] = (
-        "_cron_failures",
         "_event",
-        "_jobs_registry",
+        "_handle",
+        "_pending_jobs",
         "_result",
         "_status",
-        "_timer_handler",
+        "_storage",
         "cron_expression",
         "exception",
         "exec_at",
         "id",
-        "name",
     )
 
     def __init__(  # noqa: PLR0913
@@ -39,34 +36,36 @@ class Job(Generic[ReturnT]):
         *,
         job_id: str,
         exec_at: datetime,
-        name: str,
-        job_registry: dict[str, Job[ReturnT]],
-        job_status: JobStatus,
-        cron_expression: str | None,
+        pending_jobs: dict[str, Job[ReturnT]],
+        job_status: JobStatus = JobStatus.SCHEDULED,
+        storage: Storage,
+        cron_expression: str | None = None,
     ) -> None:
         self._event = asyncio.Event()
-        self._jobs_registry = job_registry
-        self._cron_failures = 0
+        self._pending_jobs = pending_jobs
         self._result: ReturnT = EMPTY
         self._status = job_status
-        self._timer_handler: asyncio.TimerHandle = EMPTY
+        self._storage = storage
+        self._handle: asyncio.Handle | None = None
         self.id = job_id
         self.exception: Exception | None = None
         self.cron_expression = cron_expression
         self.exec_at = exec_at
-        self.name = name
 
     @property
     def status(self) -> JobStatus:
         return self._status
 
+    @override
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__qualname__}("
             f"instance_id={id(self)}, "
-            f"exec_at={self.exec_at.isoformat()}, "
-            f"job_name={self.name}, job_id={self.id})"
+            f"exec_at={self.exec_at.isoformat()}"
         )
+
+    def bind_handle(self, handle: asyncio.Handle) -> None:
+        self._handle = handle
 
     def result(self) -> ReturnT:
         if self.status is JobStatus.SUCCESS or self._result is not EMPTY:
@@ -93,10 +92,10 @@ class Job(Generic[ReturnT]):
         job_status: JobStatus,
         time_handler: asyncio.TimerHandle,
     ) -> None:
-        self._timer_handler = time_handler
-        self.exec_at = exec_at
         self._status = job_status
         self._event = asyncio.Event()
+        self._handle = time_handler
+        self.exec_at = exec_at
 
     def is_done(self) -> bool:
         return self._event.is_set()
@@ -118,17 +117,10 @@ class Job(Generic[ReturnT]):
     async def cancel(self) -> None:
         self._status = JobStatus.CANCELLED
         self._cancel()
+        await self._storage.delete_schedule(self.id)
 
     def _cancel(self) -> None:
-        _ = self._jobs_registry.pop(self.id, None)
-        self._timer_handler.cancel()
         self._event.set()
-
-    def register_failures(self) -> None:
-        self._cron_failures += 1
-
-    def register_success(self) -> None:
-        self._cron_failures = 0
-
-    def should_reschedule(self, max_failures: int) -> bool:
-        return self._cron_failures < max_failures
+        _ = self._pending_jobs.pop(self.id, None)
+        if self._handle is not None:
+            self._handle.cancel()

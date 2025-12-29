@@ -13,11 +13,15 @@ from typing import (
     Generic,
     ParamSpec,
     TypeVar,
+    cast,
     overload,
 )
 
+from typing_extensions import Unpack, override
+
+from jobber._internal.common.constants import PATCH_SUFFIX
 from jobber._internal.common.datastructures import State
-from jobber._internal.configuration import Cron, RouteOptions
+from jobber._internal.exceptions import RouteAlreadyRegisteredError
 
 if TYPE_CHECKING:
     from collections.abc import (
@@ -25,22 +29,20 @@ if TYPE_CHECKING:
         Callable,
         Coroutine,
         Iterator,
-        Mapping,
         Sequence,
     )
-    from types import CoroutineType
 
-    from jobber._internal.common.constants import RunMode
     from jobber._internal.common.types import Lifespan
+    from jobber._internal.configuration import RouteOptions
     from jobber._internal.middleware.base import BaseMiddleware
-    from jobber._internal.runner.scheduler import ScheduleBuilder
+    from jobber._internal.scheduler.scheduler import ScheduleBuilder
 
 
-ParamsT = ParamSpec("ParamsT")
+T_co = TypeVar("T_co", covariant=True)
 Return_co = TypeVar("Return_co", covariant=True)
+ParamsT = ParamSpec("ParamsT")
 Route_co = TypeVar("Route_co", bound="Route[..., Any]", covariant=True)
 Router_co = TypeVar("Router_co", bound="Router", covariant=True)
-T_co = TypeVar("T_co", covariant=True)
 
 
 class Route(ABC, Generic[ParamsT, Return_co]):
@@ -60,13 +62,6 @@ class Route(ABC, Generic[ParamsT, Return_co]):
         **kwargs: ParamsT.kwargs,
     ) -> Return_co:
         return self.func(*args, **kwargs)
-
-    @overload
-    def schedule(
-        self: Route[ParamsT, CoroutineType[object, object, T_co]],
-        *args: ParamsT.args,
-        **kwargs: ParamsT.kwargs,
-    ) -> ScheduleBuilder[T_co]: ...
 
     @overload
     def schedule(
@@ -97,7 +92,7 @@ async def dummy_lifespan(_: Router) -> AsyncIterator[None]:
 
 
 def resolve_name(func: Callable[ParamsT, Return_co], /) -> str:
-    name = func.__name__
+    name = func.__name__.removesuffix(PATCH_SUFFIX)
     fmodule = func.__module__
     if name == "<lambda>":
         name = f"lambda_{uuid.uuid4().hex}"
@@ -143,14 +138,7 @@ class Registrator(ABC, Generic[Route_co]):
     @overload
     def __call__(
         self,
-        *,
-        retry: int = 0,
-        timeout: float = 600,
-        run_mode: RunMode | None = None,
-        name: str | None = None,
-        cron: str | Cron | None = None,
-        durable: bool | None = None,
-        metadata: Mapping[str, Any] | None = None,
+        **options: Unpack[RouteOptions],
     ) -> Callable[
         [Callable[ParamsT, Return_co]], Route[ParamsT, Return_co]
     ]: ...
@@ -159,44 +147,18 @@ class Registrator(ABC, Generic[Route_co]):
     def __call__(
         self,
         func: Callable[ParamsT, Return_co],
-        *,
-        retry: int = 0,
-        timeout: float = 600,
-        run_mode: RunMode | None = None,
-        name: str | None = None,
-        cron: str | Cron | None = None,
-        durable: bool | None = None,
-        metadata: Mapping[str, Any] | None = None,
+        **options: Unpack[RouteOptions],
     ) -> Route[ParamsT, Return_co]: ...
 
-    def __call__(  # noqa: PLR0913
+    def __call__(
         self,
         func: Callable[ParamsT, Return_co] | None = None,
-        *,
-        retry: int = 0,
-        timeout: float = 600,  # default 10 min.
-        run_mode: RunMode | None = None,
-        name: str | None = None,
-        cron: str | Cron | None = None,
-        durable: bool | None = None,
-        metadata: Mapping[str, Any] | None = None,
+        **options: Unpack[RouteOptions],
     ) -> (
         Route[ParamsT, Return_co]
         | Callable[[Callable[ParamsT, Return_co]], Route[ParamsT, Return_co]]
     ):
-        if isinstance(cron, str):
-            cron = Cron(cron)
-
-        route_options = RouteOptions(
-            retry=retry,
-            timeout=timeout,
-            cron=cron,
-            run_mode=run_mode,
-            name=name,
-            durable=durable,
-            metadata=metadata,
-        )
-        wrapper = self._register(route_options)
+        wrapper = self._register(options)
         if callable(func):
             return wrapper(func)
         return wrapper  # pragma: no cover
@@ -208,7 +170,13 @@ class Registrator(ABC, Generic[Route_co]):
         def wrapper(
             func: Callable[ParamsT, Return_co],
         ) -> Route[ParamsT, Return_co]:
-            name = options.name or resolve_name(func)
+            if isinstance(func, Route):
+                func = cast("Callable[ParamsT, Return_co]", func.func)
+
+            name = options.get("func_name") or resolve_name(func)
+            if name in self._routes:
+                raise RouteAlreadyRegisteredError(name)
+
             return self.register(name, func, options)
 
         return wrapper
@@ -239,6 +207,7 @@ class Router(ABC):
     def task(self) -> Registrator[Route[..., Any]]:
         raise NotImplementedError
 
+    @override
     def __repr__(self) -> str:
         return f"<{type(self).__name__}>"
 
