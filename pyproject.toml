@@ -260,4 +260,3 @@ upload_to_vcs_release = true
 [tool.semantic_release.remote]
 type = "github"
 ignore_token_for_push = true
-url = "git@github.com:theseriff/jobber.git"
