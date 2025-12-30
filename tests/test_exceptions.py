@@ -1,30 +1,21 @@
 import asyncio
 import time
-from datetime import datetime
-from typing import TypedDict
 from unittest.mock import Mock
 
 import pytest
 
-from jobber import Jobber
 from jobber._internal.exceptions import (
     ApplicationStateError,
     JobNotCompletedError,
     JobTimeoutError,
-    NegativeDelayError,
 )
-
-
-class CommonKwargs(TypedDict):
-    now: datetime
-    to_thread: bool
-    to_process: bool
+from tests.conftest import create_app
 
 
 async def test_jobber_runtime_error() -> None:
-    jobber = Jobber()
+    jobber = create_app()
 
-    @jobber.register
+    @jobber.task
     def f() -> None: ...
 
     reason = "The Jobber application is not started."
@@ -37,7 +28,7 @@ async def test_jobber_runtime_error() -> None:
         )
 
         with pytest.raises(ApplicationStateError, match=reason):
-            _ = jobber.register(f)
+            _ = jobber.task(f, func_name="test1")
 
         with pytest.raises(ApplicationStateError, match=reason):
             jobber.add_middleware(Mock())
@@ -47,9 +38,9 @@ async def test_jobber_runtime_error() -> None:
 
 
 async def test_job_not_completed() -> None:
-    jobber = Jobber()
+    jobber = create_app()
 
-    @jobber.register(func_name="f1")
+    @jobber.task(func_name="f1")
     def f1(num: int) -> int:
         return num + 1
 
@@ -63,27 +54,28 @@ async def test_job_not_completed() -> None:
         await job.wait()
         assert job.result() == expected_val
 
-        with pytest.raises(NegativeDelayError, match="Negative delay_seconds"):
-            _ = await f1.schedule(2).delay(-1)
-
 
 async def test_job_timeout() -> None:
     timeout = 0.005
-    jobber = Jobber()
+    jobber = create_app()
 
-    @jobber.register(timeout=timeout)
+    @jobber.task(timeout=timeout)
     async def f1() -> None:
         await asyncio.sleep(5000)
 
-    @jobber.register(timeout=timeout)
+    @jobber.task(timeout=timeout)
     def f2() -> None:
         time.sleep(0.01)
+
+    @jobber.task
+    async def f3() -> str:
+        return "test"
 
     async with jobber:
         job1 = await f1.schedule().delay(0)
         job2 = await f2.schedule().delay(0)
-        await job1.wait()
-        await job2.wait()
+        job3 = await f3.schedule().delay(0)
+        await jobber.wait_all()
 
         match = (
             "job_id: {id} exceeded timeout of {timeout} seconds. "
@@ -94,3 +86,4 @@ async def test_job_timeout() -> None:
 
         assert type(job2.exception) is JobTimeoutError
         assert str(job2.exception) == match.format(id=job2.id, timeout=timeout)
+        assert job3.result() == "test"

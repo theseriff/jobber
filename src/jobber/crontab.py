@@ -3,48 +3,48 @@
 from datetime import datetime
 from typing import Final
 
-from crontab import CronTab
+from crontab import CronTab as _CronTab
+from typing_extensions import override
 
 from jobber._internal.cron_parser import CronParser
 
 
-class Crontab(CronParser):
-    """A cron expression parser implementation for Jobber.
+class CronTab(CronParser):
+    """Cron expression parser based on the `crontab` library."""
 
-    This class extends the `CronParser` abstract base class and utilizes
-    the `crontab` library to parse cron expressions and calculate
-    the next scheduled run time.
-    """
-
-    __slots__: tuple[str, ...] = ("_entry", "_expression")
+    __slots__: tuple[str, ...] = ("_entry",)
 
     def __init__(self, expression: str) -> None:
-        """Initialize a `Cronier` instance.
+        """Initialize a CronTab parser.
 
         Args:
-            expression: cron expression.
+            expression: A cron expression.
 
         """
-        self._expression: str = expression
-        self._entry: Final = CronTab(expression)
+        self._entry: Final = _CronTab(expression)
 
+    @override
     def next_run(self, *, now: datetime) -> datetime:
-        """Return the next run `datetime`.
+        """Compute the next scheduled execution time.
 
         Args:
-            now: current time.
+            now: Current datetime.
 
         Returns:
-            The next run `datetime`.
+            The next run datetime.
 
         """
         return self._entry.next(now=now, return_datetime=True)  # type: ignore[no-any-return] # pyright: ignore[reportAttributeAccessIssue,reportUnknownMemberType,reportUnknownVariableType]
 
-    def get_expression(self) -> str:
-        """Return a cron expression.
 
-        Returns:
-            A cron expression.
+def create_crontab(expression: str) -> CronTab:
+    """Create a CronTab instance.
 
-        """
-        return self._expression
+    Args:
+        expression: A cron expression.
+
+    Returns:
+        A new CronTab instance.
+
+    """
+    return CronTab(expression)

@@ -3,19 +3,23 @@ from __future__ import annotations
 import multiprocessing
 import sys
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, TypedDict
+
+from typing_extensions import NotRequired
+
+from jobber._internal.common.constants import INFINITY
 
 if TYPE_CHECKING:
-    import asyncio
     from collections.abc import Mapping
     from zoneinfo import ZoneInfo
 
     from jobber._internal.common.constants import RunMode
     from jobber._internal.common.types import LoopFactory
-    from jobber._internal.cron_parser import CronParser
-    from jobber._internal.serializers.abc import JobsSerializer
-    from jobber._internal.storage.abc import JobRepository
+    from jobber._internal.cron_parser import CronFactory
+    from jobber._internal.serializers.base import Serializer
+    from jobber._internal.storage.abc import Storage
+    from jobber._internal.typeadapter.base import Dumper, Loader
 
 
 @dataclass(slots=True, kw_only=True)
@@ -44,24 +48,37 @@ class WorkerPools:
 
 @dataclass(slots=True, kw_only=True)
 class JobberConfiguration:
-    loop_factory: LoopFactory
     tz: ZoneInfo
-    durable: JobRepository
+    dumper: Dumper
+    loader: Loader
+    storage: Storage
+    getloop: LoopFactory
+    serializer: Serializer
     worker_pools: WorkerPools
-    serializer: JobsSerializer
-    cron_parser_cls: type[CronParser]
+    cron_factory: CronFactory
     app_started: bool = False
-    asyncio_tasks: set[asyncio.Task[Any]]
-
-    def close(self) -> None:
-        self.worker_pools.close()
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
-class RouteConfiguration:
-    retry: int
-    timeout: float
-    is_async: bool
-    func_name: str
-    run_mode: RunMode
-    metadata: Mapping[str, Any] | None
+class Cron:
+    expression: str = field(kw_only=False)
+    max_runs: int = INFINITY
+    max_failures: int = 10
+
+    def __post_init__(self) -> None:
+        if self.max_failures < 1:
+            msg = (
+                "max_cron_failures must be >= 1."
+                " Use 1 for 'stop on first error'."
+            )
+            raise ValueError(msg)
+
+
+class RouteOptions(TypedDict):
+    func_name: NotRequired[str]
+    cron: NotRequired[Cron | str]
+    retry: NotRequired[int]
+    timeout: NotRequired[float]
+    durable: NotRequired[bool]
+    run_mode: NotRequired[RunMode]
+    metadata: NotRequired[Mapping[str, Any]]

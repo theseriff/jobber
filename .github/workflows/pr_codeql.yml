@@ -8,12 +8,12 @@ on:
       - ready_for_review
     branches:
       - main
-    paths:
-      - src/**
-      - tests/**
-      - pyproject.toml
+      - develop
   schedule:
     - cron: "39 20 * * 0"
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
