@@ -10,53 +10,19 @@ class JobNotCompletedError(BaseJobberError):
 
     def __init__(
         self,
-        message: str = (
+        msg: str = (
             "Job result is not ready yet, "
             "please use .wait() and then you can use .result"
         ),
     ) -> None:
-        super().__init__(message)
+        super().__init__(msg)
 
 
 class JobFailedError(BaseJobberError):
     def __init__(self, job_id: str, reason: str) -> None:
         self.job_id: str = job_id
         self.reason: str = reason
-        message = f"job_id: {job_id}, failed_reason: {reason}"
-        super().__init__(message)
-
-
-class NegativeDelayError(BaseJobberError):
-    """Exception raised when negative delay_seconds is provided."""
-
-    def __init__(
-        self,
-        delay_seconds: float,
-        message: str = (
-            "Negative delay_seconds ({delay_seconds}) is not supported. "
-            "Please provide non-negative values."
-        ),
-    ) -> None:
-        super().__init__(message.format(delay_seconds=delay_seconds))
-        self.delay_seconds: float = delay_seconds
-
-
-class JobSkippedError(BaseJobberError):
-    """Raised when middleware chain completes without calling the job callback.
-
-    This occurs when a middleware in the chain decides to short-circuit
-    the execution and returns a response early without calling `call_next`,
-    preventing the actual job handler from being executed.
-    """
-
-    def __init__(
-        self,
-        message: str = (
-            "Job was not executed. A middleware short-circuited "
-            "the request without calling call_next."
-        ),
-    ) -> None:
-        super().__init__(message)
+        super().__init__(f"job_id: {job_id}, failed_reason: {reason}")
 
 
 class JobTimeoutError(BaseJobberError):
@@ -66,11 +32,27 @@ class JobTimeoutError(BaseJobberError):
         self.job_id: str = job_id
         self.timeout: float = timeout
 
-        message = (
+        msg = (
             f"job_id: {job_id} exceeded timeout of {timeout} seconds. "
             "Job execution was interrupted."
         )
-        super().__init__(message)
+        super().__init__(msg)
+
+
+class DuplicateJobError(RuntimeError):
+    """Raised when a job is scheduled with an ID that is already in use."""
+
+    def __init__(self, job_id: str) -> None:
+        self.job_id: str = job_id
+        super().__init__(f"Job with ID {job_id!r} is already scheduled.")
+
+
+class RouteAlreadyRegisteredError(BaseJobberError):
+    """A route with this name has already been registered."""
+
+    def __init__(self, name: str) -> None:
+        msg = f"A route with the name {name!r} has already been registered."
+        super().__init__(msg)
 
 
 class ApplicationStateError(BaseJobberError):
@@ -87,12 +69,12 @@ class ApplicationStateError(BaseJobberError):
         self.reason: str = reason
         self.solution: str = solution
 
-        message = (
+        msg = (
             f"Cannot perform operation '{operation}'.\n"
             f"  Reason: {reason}\n"
             f"  Resolution: {solution}"
         )
-        super().__init__(message)
+        super().__init__(msg)
 
 
 def raise_app_not_started_error(operation: str) -> NoReturn:

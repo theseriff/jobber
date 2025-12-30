@@ -2,16 +2,8 @@ import inspect
 from typing import Any, TypeVar, get_origin, get_type_hints
 
 from jobber._internal.context import JobContext
-from jobber._internal.runner.runners import Runnable
 
-_R = TypeVar("_R")
-
-
-class _MarkerInject:
-    pass
-
-
-INJECT: Any = _MarkerInject()
+ReturnT = TypeVar("ReturnT")
 
 
 def _build_context_mapping(context_cls: type[JobContext]) -> dict[type, str]:
@@ -22,28 +14,31 @@ def _build_context_mapping(context_cls: type[JobContext]) -> dict[type, str]:
     }
 
 
+INJECT: Any = object()
 CONTEXT_TYPE_MAP = _build_context_mapping(JobContext)
 
 
-def inject_context(runnable: Runnable[_R], context: JobContext) -> None:
-    sig = inspect.signature(runnable.strategy.func)
-    for name, param in sig.parameters.items():
+def inject_context(context: JobContext) -> None:
+    runnable = context.runnable
+    arguments = runnable.bound.arguments
+    for name, param in runnable.bound.signature.parameters.items():
         if param.default is not INJECT:
             continue
+
         annotation = param.annotation
         if annotation is inspect.Parameter.empty:
             msg = f"Parameter {name} requires a type annotation for INJECT"
             raise ValueError(msg)
 
-        target_type = get_origin(annotation) or annotation
-        if target_type is JobContext:
+        tp = get_origin(annotation) or annotation
+        if tp is JobContext:
             val = context
-        elif field_name := CONTEXT_TYPE_MAP.get(target_type):
+        elif field_name := CONTEXT_TYPE_MAP.get(tp):
             val = getattr(context, field_name)
         else:
             msg = (
-                f"Unknown type for injection: {target_type}. "
+                f"Unknown type for injection: {tp}. "
                 f"Available types: {list(CONTEXT_TYPE_MAP.keys())}"
             )
             raise ValueError(msg)
-        runnable.kwargs[name] = val
+        arguments[name] = val

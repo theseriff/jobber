@@ -1,29 +1,34 @@
 from abc import ABCMeta, abstractmethod
 from collections.abc import Iterable
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Protocol, runtime_checkable
+from typing import NamedTuple, Protocol
 
-from jobber._internal.common.constants import JobStatus, RunMode
+from jobber._internal.common.constants import JobStatus
 
 
-@dataclass(slots=True, kw_only=True)
-class JobStored:
+class ScheduledJob(NamedTuple):
     job_id: str
-    func_id: str
-    exec_at_timestamp: float
+    func_name: str
+    message: bytes
     status: JobStatus
-    func_args: bytes
-    func_kwargs: bytes
-    run_mode: RunMode
-    created_at: datetime
-    updated_at: datetime
-    cron_expression: str | None = None
-    error: str | None = None
 
 
-@runtime_checkable
-class JobRepository(Protocol, metaclass=ABCMeta):
+class Storage(Protocol, metaclass=ABCMeta):
     @abstractmethod
-    def load_all(self) -> Iterable[JobStored]:
+    async def startup(self) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def shutdown(self) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_schedules(self) -> Iterable[ScheduledJob]:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def add_schedule(self, scheduled: ScheduledJob) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_schedule(self, job_id: str) -> None:
         raise NotImplementedError
