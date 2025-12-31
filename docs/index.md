@@ -22,7 +22,7 @@ Below is a comparison of features to help you decide if Jobify fits your needs.
 | :----------------------------- | :-----------------: | :---------------: | :--------------: | :---------------: |
 | **Async Native (asyncio)**     |         ✅          |        ✅         | ❌ (Sync mostly) |        ❌         |
 | **Zero-config Persistence**    | ✅ (SQLite default) | ❌ (Needs Broker) |        ✅        | ❌ (Needs Broker) |
-| **Dependency Injection**       |         ✅          |        ✅         |        ❌        |        ❌         |
+| **Context Injection**          |         ✅          |        ✅         |        ❌        |        ❌         |
 | **FastAPI-style Routing**      |         ✅          |        ❌         |        ❌        |        ❌         |
 | **Middleware Support**         |         ✅          |        ✅         | ❌ (Events only) |   ❌ (Signals)    |
 | **Job Cancellation**           |         ✅          |        ❌         |        ✅        |        ✅         |

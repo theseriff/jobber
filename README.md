@@ -1,7 +1,19 @@
 # Jobify
 
-[![Run all tests](https://github.com/suiseriff/jobify/actions/workflows/pr_tests.yml/badge.svg)](https://github.com/suiseriff/jobify/actions/workflows/pr_tests.yml)
+<b>Robust task manager. Documentation: https://theseriff.github.io/jobify/</b>
+
+---
+
+<div align="center">
+
+[![Test Passing](https://github.com/theseriff/jobify/actions/workflows/pr_tests.yml/badge.svg)](https://github.com/theseriff/jobify/actions/workflows/pr_tests.yml)
+[![Coverage](https://coverage-badge.samuelcolvin.workers.dev/theseriff/jobify.svg)](https://coverage-badge.samuelcolvin.workers.dev/redirect/theseriff/jobify)
+[![Package version](https://img.shields.io/pypi/v/jobify?label=PyPI)](https://pypi.org/project/jobify)
+[![Supported Python versions](https://img.shields.io/pypi/pyversions/jobify.svg)](https://pypi.org/project/jobify)\
+[![CodeQL](https://github.com/theseriff/jobify/actions/workflows/pr_codeql.yml/badge.svg)](https://github.com/theseriff/jobify/actions/workflows/pr_codeql.yml)
+[![Dependency Review](https://github.com/theseriff/jobify/actions/workflows/pr_dependency_review.yml/badge.svg)](https://github.com/theseriff/jobify/actions/workflows/pr_dependency_review.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+</div>
 
 ---
 

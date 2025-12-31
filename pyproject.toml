@@ -229,11 +229,14 @@ build_command = """
     uv build
 """
 tag_format = "v{version}"
-changelog_file = "docs/CHANGELOG.md"
 major_on_zero = false
 allow_zero_version = true
 upload_to_repository = false
 upload_to_vcs_release = true
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "docs/CHANGLELOG.md"
+mask_initial_release = true
 
 [tool.semantic_release.commit_parser_options]
 minor_tags = ["feat"]
