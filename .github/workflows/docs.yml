@@ -1,12 +1,6 @@
 name: Documentation
 on:
   workflow_call:
-  push:
-    branches: [main]
-    paths:
-      - "docs/**"
-      - "zensical.toml"
-      - "pyproject.toml"
 
 permissions:
   contents: read
