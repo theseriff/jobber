@@ -65,7 +65,7 @@ By default, they do nothing.
 
 Configures the persistence layer for jobs.
 
-- **`None` (default)**: Uses `SQLiteStorage`, which saves jobs to a local SQLite database file (`jobify.sqlite`). This is the recommended option for single-node storage.
+- **`None` (default)**: Uses `SQLiteStorage`, which saves jobs to a local SQLite database file (`jobify.db`). This is the recommended option for single-node storage.
 - **`False`**: Uses `DummyStorage`, which is an in-memory storage. Jobs are not saved and will be lost if the application is restarted.
 - **Custom Storage**: You can provide an instance of a class that implements the `jobify._internal.storage.abc.Storage` abstract base class to customize the persistence logic (for example, using a different database).
 
@@ -213,7 +213,7 @@ class SkipMiddleware(BaseMiddleware):
         call_next: Callable[[JobContext], Awaitable[Any]],
         context: JobContext,
     ) -> Any:
-        if context.job.metadata.get("skip") is True:
+        if context.route_options["metadata"].get("skip") is True:
             logging.warning("Job %s was skipped by middleware.", context.job.id)
             return None  # Do not call call_next, stopping execution
 
