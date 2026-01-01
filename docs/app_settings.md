@@ -106,16 +106,13 @@ async def lifespan(app: Jobify) -> AsyncIterator[State]:
     # e.g., initialize database connections
     db = Database({})
     # The yielded dictionary will be stored in app.state
-    yield {"database": db, "cache": Cache({})}
+    yield State(pool=db, cache=Cache({}))
     print("Application shutting down!")
     # e.g., close connections gracefully
 
 
-app = Jobify(lifespan=lifespan)
-
-
 async def main() -> None:
-    async with app:
+    async with Jobify(lifespan=lifespan) as app:
         # app.state.database is now accessible.
         print("Application running with state:", app.state)
 
