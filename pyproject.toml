@@ -114,7 +114,6 @@ branch = true
 concurrency = ["thread", "multiprocessing"]
 source = ["src", "tests"]
 omit = ["**/__init__.py"]
-dynamic_context = "test_function"
 
 [tool.coverage.paths]
 source = [
@@ -236,9 +235,9 @@ upload_to_vcs_release = true
 
 
 [tool.semantic_release.commit_parser_options]
-minor_tags = ["feat"]
-patch_tags = ["fix", "perf", "docs", "chore", "build", "refactor"]
 major_tags = ["BREAKING CHANGE"]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
 parse_squash_commits = true
 ignore_merge_commits = true
 
@@ -246,10 +245,15 @@ ignore_merge_commits = true
 [tool.semantic_release.changelog]
 # Recommended patterns for conventional commits parser that is scope aware
 exclude_commit_patterns = [
-    '''ci(?:\([^)]*?\))?: .+''',
-    '''style(?:\([^)]*?\))?: .+''',
-    '''test(?:\([^)]*?\))?: .+''',
     '''Initial [Cc]ommit.*''', # codespell:ignore ommit
+    '''refactor(?:\([^)]*?\))?: .+''',
+    '''polish(?:\([^)]*?\))?: .+''',
+    '''style(?:\([^)]*?\))?: .+''',
+    '''chore(?:\([^)]*?\))?: .+''',
+    '''build\((?!deps\): .+)''',
+    '''test(?:\([^)]*?\))?: .+''',
+    '''ci(?:\([^)]*?\))?: .+''',
+    '''Merged? .*''',
 ]
 [tool.semantic_release.changelog.default_templates]
 changelog_file = "docs/CHANGELOG.md"
